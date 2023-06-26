@@ -2,7 +2,12 @@
 import gradio as gr
 import random
 import time
+import os
 from pprint import pprint
+import langchain
+from dotenv import load_dotenv
+
+load_dotenv()  # take environment variables from .env.
 
 
 TITLE = "Chat Demo"
@@ -32,23 +37,30 @@ def user_upload_file(history, file):
     return history
 
 def bot(history, instructions, *parameters):
-    bot_message = random.choice(["How are you?", 
-        'I love cat <img src="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" alt="Italian Trulli">', 
-        'I hate cat ![](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg)',
-        "I'm **very hungry**", 
-        ("https://upload.wikimedia.org/wikipedia/commons/5/53/Sheba1.JPG",),
-        ("https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav",),
-        ("https://www.africau.edu/images/default/sample.pdf",),
-        ("https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj")])
+    # bot_message = random.choice(["How are you?", 
+    #     'I love cat <img src="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" alt="Italian Trulli">', 
+    #     'I hate cat ![](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg)',
+    #     "I'm **very hungry**", 
+    #     ("https://upload.wikimedia.org/wikipedia/commons/5/53/Sheba1.JPG",),
+    #     ("https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav",),
+    #     ("https://www.africau.edu/images/default/sample.pdf",),
+    #     ("https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj")])
     # history[-1][1] = ""
     # for character in bot_message:
     #     history[-1][1] += character
     #     time.sleep(0.05)
     #     yield history
+    user_message = history[-1][0]
+    bot_message = conversation(user_message)['response']
     history[-1][1] = bot_message
+
     print({name: value for name, value in zip(PARAMETERS.keys(), parameters)})
     pprint(history)
     return history
+
+def clear_chat():
+    conversation.memory.clear()
+    return "", []
 
 def get_demo():
     with gr.Blocks() as demo:
@@ -89,7 +101,8 @@ def get_demo():
                         else:
                             submit = gr.Button(value="Submit")
                     with gr.Column(scale=1, min_width=60):
-                        clear = gr.ClearButton([msg, chatbot])
+                        # clear = gr.ClearButton([msg, chatbot])
+                        clear = gr.Button("Clear") # also clear chatbot memory
 
         msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
             bot, [chatbot, instructions] + list(parameters.values()), chatbot
@@ -103,9 +116,41 @@ def get_demo():
             submit.click(user, [msg, chatbot], [msg, chatbot], queue=False).then(
                 bot, [chatbot, instructions] + list(parameters.values()), chatbot
             ).then(lambda: gr.update(interactive=True), None, [msg], queue=False)
+        clear.click(clear_chat, [], [msg, chatbot])
 
     return demo
 
+
 if __name__ == '__main__':
+    from langchain import OpenAI
+    from langchain.chains import ConversationChain
+
+    # NOTE: OpenAI (string input) vs ChatOpenAI (prompt input)
+    # first initialize the large language model
+    llm = OpenAI(
+        temperature=0,
+        openai_api_key=os.environ['OPENAI_API_KEY'],
+        model_name="gpt-3.5-turbo"
+    )
+
+    # from langchain.chat_models import ChatOpenAI
+    # llm = ChatOpenAI(
+    #     temperature=0,
+    #     openai_api_key=os.environ['OPENAI_API_KEY'],
+    #     model_name="gpt-3.5-turbo",
+    # )
+
+    # print(llm("Hello, my name is Bob."))
+    # print(llm("What is my name?"))
+
+    # now initialize the conversation chain
+    # NOTE: ConversationChain & LLMChain
+    conversation = ConversationChain(llm=llm)
+    # print(conversation.prompt.template)
+    # print(conversation("Hello, my name is Bob."))
+    # print(conversation("What is my name?"))
+    # conversation.memory.clear()
+    # print(conversation("What is my name?"))
+    conversation.memory.clear()
     demo = get_demo()
     demo.queue().launch()
