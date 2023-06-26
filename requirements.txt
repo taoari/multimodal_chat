@@ -1,5 +1,6 @@
 gradio
+python-dotenv
 openai
 text_generation
+huggingface_hub
 langchain
-python-dotenv
