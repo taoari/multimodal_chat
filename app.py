@@ -36,7 +36,7 @@ def user_upload_file(history, file):
     history = history + [((file.name,), None)]
     return history
 
-def bot(history, instructions, *parameters):
+def bot(history, instructions, chat_mode, *parameters):
     # bot_message = random.choice(["How are you?", 
     #     'I love cat <img src="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" alt="Italian Trulli">', 
     #     'I hate cat ![](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg)',
@@ -51,9 +51,13 @@ def bot(history, instructions, *parameters):
     #     time.sleep(0.05)
     #     yield history
     user_message = history[-1][0]
-    bot_message = conversation(user_message)['response']
+    if chat_mode == 'Stateful':
+        bot_message = conversation_chain.predict(input=user_message)
+    else:
+        bot_message = llm_chain.run(input=user_message)
     history[-1][1] = bot_message
 
+    print(chat_mode)
     print({name: value for name, value in zip(PARAMETERS.keys(), parameters)})
     pprint(history)
     return history
@@ -76,6 +80,10 @@ def get_demo():
                 treeD = gr.Model3D()
 
                 parameters = {}
+
+                with gr.Accordion("Chat mode", open=False) as chat_mode_accordin:
+                    chat_mode = gr.Radio(["Stateless", "Stateful"], value='Stateful', show_label=False, info="use memory (stateful) or not (stateless)")
+                
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
                     for name, kwargs in PARAMETERS.items():
                         type_ = kwargs['type']; del kwargs['type']
@@ -105,7 +113,7 @@ def get_demo():
                         clear = gr.Button("Clear") # also clear chatbot memory
 
         msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
-            bot, [chatbot, instructions] + list(parameters.values()), chatbot
+            bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
         ).then(lambda: gr.update(interactive=True), None, [msg], queue=False)
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [chatbot, upload], [chatbot], queue=False)
@@ -114,7 +122,7 @@ def get_demo():
             # )
         else:
             submit.click(user, [msg, chatbot], [msg, chatbot], queue=False).then(
-                bot, [chatbot, instructions] + list(parameters.values()), chatbot
+                bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
             ).then(lambda: gr.update(interactive=True), None, [msg], queue=False)
         clear.click(clear_chat, [], [msg, chatbot])
 
@@ -123,34 +131,18 @@ def get_demo():
 
 if __name__ == '__main__':
     from langchain import OpenAI
-    from langchain.chains import ConversationChain
+    from langchain.chat_models import ChatOpenAI
+    from langchain.prompts import PromptTemplate
+    from langchain.chains import ConversationChain, LLMChain
 
-    # NOTE: OpenAI (string input) vs ChatOpenAI (prompt input)
-    # first initialize the large language model
-    llm = OpenAI(
+    llm = ChatOpenAI(
         temperature=0,
         openai_api_key=os.environ['OPENAI_API_KEY'],
-        model_name="gpt-3.5-turbo"
+        model_name="gpt-3.5-turbo",
     )
 
-    # from langchain.chat_models import ChatOpenAI
-    # llm = ChatOpenAI(
-    #     temperature=0,
-    #     openai_api_key=os.environ['OPENAI_API_KEY'],
-    #     model_name="gpt-3.5-turbo",
-    # )
+    llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template("{input}"), verbose=True)
+    conversation_chain = ConversationChain(llm=llm, verbose=True)
 
-    # print(llm("Hello, my name is Bob."))
-    # print(llm("What is my name?"))
-
-    # now initialize the conversation chain
-    # NOTE: ConversationChain & LLMChain
-    conversation = ConversationChain(llm=llm)
-    # print(conversation.prompt.template)
-    # print(conversation("Hello, my name is Bob."))
-    # print(conversation("What is my name?"))
-    # conversation.memory.clear()
-    # print(conversation("What is my name?"))
-    conversation.memory.clear()
     demo = get_demo()
     demo.queue().launch()
