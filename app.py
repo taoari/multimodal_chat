@@ -4,6 +4,7 @@ import random
 import time
 import os
 from pprint import pprint
+import mimetypes
 import langchain
 from dotenv import load_dotenv
 
@@ -38,6 +39,9 @@ CONFIG = {
     'upload_button': False,
 }
 
+if CONFIG['upload_button']:
+    ATTACHMENTS = {}
+
 def user(history, msg, *attachments):
     _attachments = {name: filepath for name, filepath in zip(ATTACHMENTS.keys(), attachments)}
     print(_attachments)
@@ -55,11 +59,23 @@ def user(history, msg, *attachments):
         *([gr.update(value=None, interactive=False)] * len(attachments))
 
 def user_post():
-    return gr.update(interactive=True), *([gr.update(interactive=True)] * len(ATTACHMENTS))
+    if len(ATTACHMENTS) == 0:
+        return gr.update(interactive=True)
+    else:
+        return gr.update(interactive=True), *([gr.update(interactive=True)] * len(ATTACHMENTS))
 
-def user_upload_file(history, file):
-    history = history + [((file.name,), None)]
-    return history
+def user_upload_file(msg, filepath):
+    # history = history + [((file.name,), None)]
+    mtype = mimetypes.guess_type(filepath.name)[0]
+    if mtype.startswith('image'):
+        msg += f'\n<img src="\\file={filepath.name}" alt="{os.path.basename(filepath.name)}"/>'
+    elif mtype.startswith('audio'):
+        msg += f'\n<audio controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</audio>'
+    elif mtype.startswith('video'):
+        msg += f'\n<video controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</video>'
+    else:
+        msg += f'\n<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
+    return msg
 
 def bot(history, instructions, chat_mode, *parameters):
     user_message = history[-1][0]
@@ -148,10 +164,7 @@ def get_demo():
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         if CONFIG['upload_button']:
-            upload.upload(user_upload_file, [chatbot, upload], [chatbot], queue=False)
-            # upload.upload(user_upload_file, [chatbot, btn], [chatbot], queue=False).then(
-            #     bot, [chatbot, instructions] + list(parameters.values()), chatbot
-            # )
+            upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         else:
             submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
                 bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
