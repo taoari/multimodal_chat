@@ -111,7 +111,7 @@ def get_demo():
                     attachments[name] = getattr(gr, cls_)(**kwargs)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(["Random", "Stateless", "Stateful"], value='Stateful', show_label=False, info="use memory (stateful) or not (stateless)")
+                    chat_mode = gr.Radio(["Random", "Stateless", "Stateful"], value='Random', show_label=False, info="use memory (stateful) or not (stateless)")
                 
                 parameters = {}
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
