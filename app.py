@@ -29,7 +29,9 @@ ATTACHMENTS = {
     'image': dict(cls='Image', type="filepath"),
     'audio': dict(cls='Audio', type="filepath"),
     'microphone': dict(cls="Audio", type="filepath", source="microphone"),
+    'video': dict(cls="Video"),
     "file": dict(cls="File", type="file"),
+    # 'model3d': dict(cls="Model3D"),
 }
 
 CONFIG = {
@@ -38,6 +40,7 @@ CONFIG = {
 
 def user(history, msg, *attachments):
     _attachments = {name: filepath for name, filepath in zip(ATTACHMENTS.keys(), attachments)}
+    print(_attachments)
     for name, filepath in _attachments.items():
         if filepath is not None:
             if name in ['image']:
@@ -47,7 +50,7 @@ def user(history, msg, *attachments):
             elif name in ['video']:
                 msg += f'\n<video controls><source src="\\file={filepath}">{os.path.basename(filepath)}</video>'
             else:
-                msg += f'\n<a href="\\file={filepath}">Attachment: {os.path.basename(filepath)}</a>'
+                msg += f'\n<a href="\\file={filepath.name}">📁: {os.path.basename(filepath.name)}</a>'
     return history + [[msg, None]], gr.update(value="", interactive=False), \
         *([gr.update(value=None, interactive=False)] * len(attachments))
 
@@ -69,13 +72,14 @@ def bot(history, instructions, chat_mode, *parameters):
         bot_message = random.choice([
             'I love cat <img src="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" alt="Italian Trulli">', 
             'I hate cat ![](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg)',
-            "I'm **very hungry**", 
-            ("https://upload.wikimedia.org/wikipedia/commons/5/53/Sheba1.JPG",),
+            # "I'm **very hungry**", 
+            # ("https://upload.wikimedia.org/wikipedia/commons/5/53/Sheba1.JPG",),
             ("https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav",),
+            ("https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4",),
             # ("https://www.africau.edu/images/default/sample.pdf",), # files are not shown, use HTML
-            '<a href="https://www.africau.edu/images/default/sample.pdf">sample.pdf</a>',
+            '<a href="https://www.africau.edu/images/default/sample.pdf">📁 sample.pdf</a>',
             # ("https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj"),
-            '<a href="https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj">stanford-bunny.obj</a>',
+            '<a href="https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj">📁 stanford-bunny.obj</a>',
         ])
     # # streaming
     # history[-1][1] = ""
@@ -91,8 +95,8 @@ def bot(history, instructions, chat_mode, *parameters):
     return history
 
 def clear_chat():
-    conversation.memory.clear()
-    return [], "", *([None] * len(inputs))
+    conversation_chain.memory.clear()
+    return [], "", *([None] * len(ATTACHMENTS))
 
 def get_demo():
     with gr.Blocks() as demo:
