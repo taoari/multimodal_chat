@@ -36,7 +36,7 @@ ATTACHMENTS = {
 }
 
 CONFIG = {
-    'upload_button': False,
+    'upload_button': True,
 }
 
 if CONFIG['upload_button']:
@@ -147,29 +147,28 @@ def get_demo():
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot()
                 with gr.Row():
+                    if CONFIG['upload_button']:
+                        with gr.Column(scale=0.5, min_width=30):
+                            upload = gr.UploadButton("📁") #, file_types=["image", "video", "audio", "file"])
                     with gr.Column(scale=8):
                         msg = gr.Textbox(show_label=False,
                             placeholder="Enter text and press ENTER").style(container=False)
                     with gr.Column(scale=1, min_width=60):
-                        if CONFIG['upload_button']:
-                            upload = gr.UploadButton("📁") #, file_types=["image", "video", "audio", "file"])
-                        else:
-                            submit = gr.Button(value="Submit")
+                        submit = gr.Button(value="Submit")
                     with gr.Column(scale=1, min_width=60):
                         # clear = gr.ClearButton([msg, chatbot])
                         clear = gr.Button("Clear") # also clear chatbot memory
 
+        if CONFIG['upload_button']:
+            upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
             bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
-        if CONFIG['upload_button']:
-            upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
-        else:
-            submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-                bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
-            ).then(
-                user_post, None, [msg] + list(attachments.values()), queue=False)
+        submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
+            bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
+        ).then(
+            user_post, None, [msg] + list(attachments.values()), queue=False)
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
     return demo
