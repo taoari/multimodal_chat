@@ -50,7 +50,7 @@ def user(history, msg, *attachments):
             elif name in ['video']:
                 msg += f'\n<video controls><source src="\\file={filepath}">{os.path.basename(filepath)}</video>'
             else:
-                msg += f'\n<a href="\\file={filepath.name}">📁: {os.path.basename(filepath.name)}</a>'
+                msg += f'\n<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return history + [[msg, None]], gr.update(value="", interactive=False), \
         *([gr.update(value=None, interactive=False)] * len(attachments))
 
