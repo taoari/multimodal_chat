@@ -130,16 +130,20 @@ def get_demo():
 
 
 if __name__ == '__main__':
-    from langchain import OpenAI
+    from langchain.llms import HuggingFaceTextGenInference
     from langchain.chat_models import ChatOpenAI
     from langchain.prompts import PromptTemplate
     from langchain.chains import ConversationChain, LLMChain
 
-    llm = ChatOpenAI(
-        temperature=0,
-        openai_api_key=os.environ['OPENAI_API_KEY'],
-        model_name="gpt-3.5-turbo",
+    llm = HuggingFaceTextGenInference(
+        inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
     )
+
+    # llm = ChatOpenAI(
+    #     model_name="gpt-3.5-turbo",
+    # )
+
+    print(repr(llm)) # NOTE: prints private tokens
 
     llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template("{input}"), verbose=True)
     conversation_chain = ConversationChain(llm=llm, verbose=True)
