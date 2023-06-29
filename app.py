@@ -90,6 +90,18 @@ def bot(history, instructions, chat_mode, *parameters):
         bot_message = conversation_chain.predict(input=user_message)
     elif chat_mode.startswith('ChatOpenAI'):
         bot_message = llm_chain.run(input=user_message)
+    elif chat_mode.startswith('StabilityAI'):
+        import stability_ai
+        msg_dict = parse_message(user_message)
+        img = stability_ai.generate(msg_dict["text"], 
+            msg_dict["images"][-1] if "images" in msg_dict and len(msg_dict["images"]) > 1 else None)
+        if img is not None:
+            import tempfile
+            fname = tempfile.NamedTemporaryFile(prefix='gradio/stability_ai-', suffix='.png').name
+            img.save(fname)
+            bot_message = format_to_message(dict(images=[fname]))
+        else:
+            bot_message = "Sorry, stability.ai failed to generate image."
     else:
         # Example multimodal messages
         bot_message = random.choice([
@@ -133,7 +145,7 @@ def get_demo():
                     attachments[name] = getattr(gr, cls_)(**kwargs)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(["Random", "OpenAI", "ChatOpenAI"], value='ChatOpenAI', show_label=False, 
+                    chat_mode = gr.Radio(["Random", "OpenAI", "ChatOpenAI", "StabilityAI"], value='ChatOpenAI', show_label=False, 
                         info="")
                 
                 parameters = {}

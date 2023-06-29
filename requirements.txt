@@ -8,3 +8,6 @@ openai
 text_generation
 huggingface_hub
 langchain
+
+# stable diffusion
+stability-sdk
