@@ -54,21 +54,21 @@ def parse_message(message):
     return res
 
 def format_to_message(res):
-    msg = res["text"]
+    msg = res["text"] if "text" in res else ""
     if "images" in res:
         for filepath in res["images"]:
             filepath = _prefix_local_file(filepath)
-            msg += f'\n<img src="{filepath}" alt="{os.path.basename(filepath)}"/>'
+            msg += f'<img src="{filepath}" alt="{os.path.basename(filepath)}"/>'
     if "audios" in res:
         for filepath in res["audios"]:
             filepath = _prefix_local_file(filepath)
-            msg += f'\n<audio controls><source src="{filepath}">{os.path.basename(filepath)}</audio>'
+            msg += f'<audio controls><source src="{filepath}">{os.path.basename(filepath)}</audio>'
     if "videos" in res:
         for filepath in res["videos"]:
             filepath = _prefix_local_file(filepath)
-            msg += f'\n<video controls><source src="{filepath}">{os.path.basename(filepath)}</video>'
+            msg += f'<video controls><source src="{filepath}">{os.path.basename(filepath)}</video>'
     if "files" in res:
         for filepath in res["files"]:
             filepath = _prefix_local_file(filepath)
-            msg += f'\n<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
+            msg += f'<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
     return msg

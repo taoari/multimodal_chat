@@ -8,6 +8,8 @@ import mimetypes
 import langchain
 from dotenv import load_dotenv
 
+from utils import parse_message, format_to_message
+
 load_dotenv()  # take environment variables from .env.
 
 TITLE = "Multimodal Chat Demo"
@@ -45,17 +47,18 @@ if CONFIG['upload_button']:
 def user(history, msg, *attachments):
     _attachments = {name: filepath for name, filepath in zip(ATTACHMENTS.keys(), attachments)}
     print(_attachments)
+    msg_dict = dict(text=msg, images=[], audios=[], videos=[], files=[])
     for name, filepath in _attachments.items():
         if filepath is not None:
             if name in ['image', 'webcam']:
-                msg += f'\n<img src="\\file={filepath}" alt="{os.path.basename(filepath)}"/>'
+                msg_dict['images'].append(filepath)
             elif name in ['audio', 'microphone']:
-                msg += f'\n<audio controls><source src="\\file={filepath}">{os.path.basename(filepath)}</audio>'
+                msg_dict['audios'].append(filepath)
             elif name in ['video']:
-                msg += f'\n<video controls><source src="\\file={filepath}">{os.path.basename(filepath)}</video>'
+                msg_dict['videos'].append(filepath)
             else:
-                msg += f'\n<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
-    return history + [[msg, None]], gr.update(value="", interactive=False), \
+                msg_dict['files'].append(filepath)
+    return history + [[format_to_message(msg_dict), None]], gr.update(value="", interactive=False), \
         *([gr.update(value=None, interactive=False)] * len(attachments))
 
 def user_post():
@@ -68,13 +71,13 @@ def user_upload_file(msg, filepath):
     # history = history + [((file.name,), None)]
     mtype = mimetypes.guess_type(filepath.name)[0]
     if mtype.startswith('image'):
-        msg += f'\n<img src="\\file={filepath.name}" alt="{os.path.basename(filepath.name)}"/>'
+        msg += f'<img src="\\file={filepath.name}" alt="{os.path.basename(filepath.name)}"/>'
     elif mtype.startswith('audio'):
-        msg += f'\n<audio controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</audio>'
+        msg += f'<audio controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</audio>'
     elif mtype.startswith('video'):
-        msg += f'\n<video controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</video>'
+        msg += f'<video controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</video>'
     else:
-        msg += f'\n<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
+        msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
 def bot(history, instructions, chat_mode, *parameters):
@@ -86,17 +89,12 @@ def bot(history, instructions, chat_mode, *parameters):
     else:
         # Example multimodal messages
         bot_message = random.choice([
-            'I love cat <img src="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" alt="Italian Trulli">', 
-            'I hate cat ![](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg)',
-            # "I'm **very hungry**", 
-            # ("https://upload.wikimedia.org/wikipedia/commons/5/53/Sheba1.JPG",),
-            ("https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav",),
-            ("https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4",),
-            # ("https://www.africau.edu/images/default/sample.pdf",), # files are not shown, use HTML
-            '<a href="https://www.africau.edu/images/default/sample.pdf">📁 sample.pdf</a>',
-            # ("https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj"),
-            '<a href="https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/stanford-bunny.obj">📁 stanford-bunny.obj</a>',
-        ])
+            format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
+            format_to_message(dict(text="I hate cat", images=["https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg"])),
+            format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
+            format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
+            format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
+         ])
     # # streaming
     # history[-1][1] = ""
     # for character in bot_message:
