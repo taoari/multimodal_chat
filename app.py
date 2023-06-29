@@ -99,7 +99,7 @@ def clear_chat():
 
 def barcode_capture(webcam, output):
     from barcode import get_barcodes_pil
-    res, img = get_barcodes_pil(webcam)
+    res, img = get_barcodes_pil(webcam, draw=False)
 
     if "barcode" not in CONFIG:
         CONFIG["barcode"] = ""
