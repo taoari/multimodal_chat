@@ -100,6 +100,10 @@ def get_demo():
             parameters = {}
             chat_mode = gr.State(value="Barcode")
             instructions = gr.State()
+            with gr.Column(scale=1):
+                global ATTACHMENTS
+                attachments = {'webcam': gr.Image(type="filepath", source="webcam")}
+                ATTACHMENTS = attachments
 
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot()

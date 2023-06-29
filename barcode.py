@@ -62,9 +62,9 @@ def get_barcodes_from_message(message):
     if len(parsed_msg["images"]) == 0:
         return None, None
     img = cv2.imread(parsed_msg["images"][-1]) # only use the last image
-    if max(img.shape[:2]) >= 640:
-        img = image_resize(img, 640) # NOTE: zbar does not work pretty good for large resolution images
-        print(img.shape)
+    # if max(img.shape[:2]) >= 640:
+    #     img = image_resize(img, 640) # NOTE: zbar does not work pretty good for large resolution images
+    #     print(img.shape)
     return get_barcodes(img)
 
 
