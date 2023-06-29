@@ -144,6 +144,12 @@ def bot(history, instructions, chat_mode, *parameters):
     pprint(history)
     return history
 
+def bot_rerun(history, instructions, chat_mode, *parameters):
+    if len(history) >= 1:
+        history[-1][1] = None
+    history = bot(history, instructions, chat_mode, *parameters)
+    return history
+
 def clear_chat():
     conversation_chain.memory.clear()
     return [], "", *([None] * len(ATTACHMENTS))
@@ -190,6 +196,8 @@ def get_demo():
                     with gr.Column(scale=1, min_width=60):
                         submit = gr.Button(value="Submit")
                     with gr.Column(scale=1, min_width=60):
+                        rerun = gr.Button(value="Rerun")
+                    with gr.Column(scale=1, min_width=60):
                         # clear = gr.ClearButton([msg, chatbot])
                         clear = gr.Button("Clear") # also clear chatbot memory
 
@@ -203,6 +211,7 @@ def get_demo():
             bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
+        rerun.click(bot_rerun, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot)
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
     return demo
