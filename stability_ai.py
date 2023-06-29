@@ -8,11 +8,11 @@ from stability_sdk import client
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 
 
-def generate(prompt, init_img=None, start_schedule=0.6, width=512, height=512,
+def generate(prompt, init_image=None, start_schedule=0.6, width=512, height=512,
              engine="stable-diffusion-xl-beta-v2-2-2"):
     """
     Parameters:
-        init_img: PIL Image
+        init_image: PIL Image
         start_schedule: the strength of our prompt in relation to our initial image.
             0.0 -- initial image, 1.0 -- prompt
     Returns:
@@ -28,7 +28,7 @@ def generate(prompt, init_img=None, start_schedule=0.6, width=512, height=512,
         # stable-diffusion-512-v2-1 stable-diffusion-768-v2-1 stable-diffusion-xl-beta-v2-2-2 stable-inpainting-v1-0 stable-inpainting-512-v2-0
     )
 
-    kwargs = dict(init_img=init_img, start_schedule=start_schedule) if init_img is not None else {}
+    kwargs = dict(init_image=init_image, start_schedule=start_schedule) if init_image is not None else {}
 
     # Set up our initial generation parameters.
     answers = stability_api.generate(
