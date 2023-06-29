@@ -4,6 +4,22 @@ from pyzbar.pyzbar import decode
 
 from utils import parse_message, format_to_message
 
+def image_resize(img, shape):
+    height, width = img.shape[:2]
+    if isinstance(shape, int):
+        if width >= height:
+            _shape = (shape, -1)
+        else:
+            _shape = (-1, shape)
+    else:
+        _shape = shape
+    
+    w, h = _shape
+    if w == -1:
+        w = int((width/height) * h)
+    elif h == -1:
+        h = int((height/width) * w)
+    return cv2.resize(img, (w,h))
 
 def bot(user_message, DEBUG=False):
     """ Input user_message and output bot_message
@@ -46,6 +62,9 @@ def get_barcodes_from_message(message):
     if len(parsed_msg["images"]) == 0:
         return None, None
     img = cv2.imread(parsed_msg["images"][-1]) # only use the last image
+    if max(img.shape[:2]) >= 640:
+        img = image_resize(img, 640) # NOTE: zbar does not work pretty good for large resolution images
+        print(img.shape)
     return get_barcodes(img)
 
 
