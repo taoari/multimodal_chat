@@ -87,7 +87,8 @@ def get_barcodes(img, draw=True):
 
 def get_barcodes_pil(img, draw=True):
     _draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype('Arial.ttf', size=25)  # Set 'arial.ttf' for Windows
+    # wget https://github.com/gasharper/linux-fonts/raw/master/arial.ttf # download for linux
+    font = ImageFont.truetype('arial.ttf', size=30)  # Set 'arial.ttf' for Windows
     res = []
     for d in decode(img):
         s = d.data.decode()

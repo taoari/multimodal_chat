@@ -21,7 +21,7 @@ DESCRIPTION = """
 
 * HOW TO USE: Put a product barcode in front of the webcam or upload an image. Then Click the "Submit" button to test.
 
-* NOTE: You may unfold the "Captured Image" (if `--stream` is enabled) to check on the barcode detected frame. But I would recommand to fold it since it is annoying for blinking. The reason is that the webcam streaming can not be stopped once it started.
+* NOTE: You may unfold the "Captured Image" (if `--stream` is enabled) to check on the barcode detected frame. But I would recommand to fold it since it is annoying for blinking.
 
 """
 
