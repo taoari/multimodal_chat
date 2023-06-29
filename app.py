@@ -14,7 +14,11 @@ load_dotenv()  # take environment variables from .env.
 
 TITLE = "Multimodal Chat Demo"
 
-DESCRIPTION = """Description in Markdown
+DESCRIPTION = """
+* Chat mode:
+  * Random: a chatbot template to randomly generate multimodal responses
+  * OpenAI: stateless raw ChatGPT
+  * ChatOpenAI: stateful (w/ memory) prompt engineered ChatGPT
 """
 
 DEFAULT_INSTRUCTIONS = """
@@ -82,9 +86,9 @@ def user_upload_file(msg, filepath):
 
 def bot(history, instructions, chat_mode, *parameters):
     user_message = history[-1][0]
-    if chat_mode == 'Stateful':
+    if chat_mode.startswith('OpenAI'):
         bot_message = conversation_chain.predict(input=user_message)
-    elif chat_mode == 'Stateless':
+    elif chat_mode.startswith('ChatOpenAI'):
         bot_message = llm_chain.run(input=user_message)
     else:
         # Example multimodal messages
@@ -119,7 +123,7 @@ def clear_chat():
 def get_demo():
     with gr.Blocks() as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
-        with gr.Accordion("Description", open=False):
+        with gr.Accordion("Description", open=True):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
             with gr.Column(scale=1):
@@ -129,8 +133,8 @@ def get_demo():
                     attachments[name] = getattr(gr, cls_)(**kwargs)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(["Random", "Stateless", "Stateful"], value='Stateful', show_label=False, 
-                        info="use memory (stateful) or not (stateless)")
+                    chat_mode = gr.Radio(["Random", "OpenAI", "ChatOpenAI"], value='ChatOpenAI', show_label=False, 
+                        info="")
                 
                 parameters = {}
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
@@ -197,4 +201,4 @@ if __name__ == '__main__':
     conversation_chain = ConversationChain(llm=llm, verbose=True)
 
     demo = get_demo()
-    demo.queue().launch()
+    demo.queue().launch(share=True)
