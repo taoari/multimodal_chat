@@ -15,7 +15,14 @@ DEBUG = True
 
 TITLE = "Multimodal Chat Demo"
 
-DESCRIPTION = """Description in Markdown
+DESCRIPTION = """
+
+# This demo shows how to scan a barcode and search in Walgreens catalog. 
+
+* HOW TO USE: Put a product barcode in front of the webcam or upload an image. Then Click the "Submit" button to test.
+
+* NOTE: You may unfold the "Captured Image" to check on the barcode detected frame. But I would recommand to fold it since it is annoying for blinking. The reason is that the webcam streaming can not be stopped once it started.
+
 """
 
 DEFAULT_INSTRUCTIONS = """
@@ -34,7 +41,7 @@ def user(history, msg, *attachments):
     print(_attachments)
     for name, filepath in _attachments.items():
         if filepath is not None:
-            if name in ['image', 'webcam']:
+            if name in ['image']:
                 msg += f'\n<img src="\\file={filepath}" alt="{os.path.basename(filepath)}"/>'
             elif name in ['audio', 'microphone']:
                 msg += f'\n<audio controls><source src="\\file={filepath}">{os.path.basename(filepath)}</audio>'
@@ -90,10 +97,28 @@ def clear_chat():
     conversation_chain.memory.clear()
     return [], "", *([None] * len(ATTACHMENTS))
 
+def barcode_capture(webcam, output):
+    from barcode import get_barcodes_pil
+    res, img = get_barcodes_pil(webcam)
+
+    if "barcode" not in CONFIG:
+        CONFIG["barcode"] = ""
+        CONFIG["barcode_image"] = webcam
+
+    if res is not None and len(res) > 0:
+        _bar = res[-1]
+        if CONFIG["barcode"] != _bar:
+            CONFIG["barcode"] = _bar
+            CONFIG["barcode_image"] = webcam
+        
+    return CONFIG["barcode_image"]
+
+
+
 def get_demo():
     with gr.Blocks() as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
-        with gr.Accordion("Description", open=False):
+        with gr.Accordion("Description", open=True):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
             attachments = {}
@@ -101,9 +126,11 @@ def get_demo():
             chat_mode = gr.State(value="Barcode")
             instructions = gr.State()
             with gr.Column(scale=1):
-                global ATTACHMENTS
-                attachments = {'webcam': gr.Image(type="filepath", source="webcam")}
-                ATTACHMENTS = attachments
+                webcam = gr.Image(type="pil", source="webcam", streaming=True)
+                with gr.Accordion("Captured Image", open=False) as _accordin:
+                    global ATTACHMENTS
+                    attachments = {'image': gr.Image(type="filepath")}
+                    ATTACHMENTS = attachments
 
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot()
@@ -131,6 +158,8 @@ def get_demo():
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
+
+        webcam.change(barcode_capture, inputs=webcam, outputs=attachments['image'])
 
     return demo
 

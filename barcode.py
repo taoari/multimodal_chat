@@ -79,3 +79,13 @@ def get_barcodes(frame):
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
         res.append(s)
     return res, frame
+
+
+def get_barcodes_pil(img):
+    res = []
+    for d in decode(img):
+        s = d.data.decode()
+        # TODO: draw on pil image
+        print(s)
+        res.append(s)
+    return res, img
