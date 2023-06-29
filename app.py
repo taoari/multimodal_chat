@@ -21,7 +21,7 @@ DESCRIPTION = """
 
 * HOW TO USE: Put a product barcode in front of the webcam or upload an image. Then Click the "Submit" button to test.
 
-* NOTE: You may unfold the "Captured Image" to check on the barcode detected frame. But I would recommand to fold it since it is annoying for blinking. The reason is that the webcam streaming can not be stopped once it started.
+* NOTE: You may unfold the "Captured Image" (if `--stream` is enabled) to check on the barcode detected frame. But I would recommand to fold it since it is annoying for blinking. The reason is that the webcam streaming can not be stopped once it started.
 
 """
 
@@ -41,7 +41,7 @@ def user(history, msg, *attachments):
     print(_attachments)
     for name, filepath in _attachments.items():
         if filepath is not None:
-            if name in ['image']:
+            if name in ['image', 'webcam']:
                 msg += f'\n<img src="\\file={filepath}" alt="{os.path.basename(filepath)}"/>'
             elif name in ['audio', 'microphone']:
                 msg += f'\n<audio controls><source src="\\file={filepath}">{os.path.basename(filepath)}</audio>'
@@ -116,6 +116,7 @@ def barcode_capture(webcam, output):
 
 
 def get_demo():
+    global ATTACHMENTS
     with gr.Blocks() as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
         with gr.Accordion("Description", open=True):
@@ -126,11 +127,13 @@ def get_demo():
             chat_mode = gr.State(value="Barcode")
             instructions = gr.State()
             with gr.Column(scale=1):
-                webcam = gr.Image(type="pil", source="webcam", streaming=True)
-                with gr.Accordion("Captured Image", open=False) as _accordin:
-                    global ATTACHMENTS
-                    attachments = {'image': gr.Image(type="filepath")}
-                    ATTACHMENTS = attachments
+                if args.stream:
+                    webcam_stream = gr.Image(type="pil", source="webcam", streaming=True)
+                    with gr.Accordion("Captured Image", open=False) as _accordin:
+                        attachments = {'image': gr.Image(type="filepath")}
+                else:
+                    attachments = {'webcam': gr.Image(type="filepath", source="webcam")}
+            ATTACHMENTS = attachments
 
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot()
@@ -159,16 +162,31 @@ def get_demo():
             user_post, None, [msg] + list(attachments.values()), queue=False)
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
-        webcam.change(barcode_capture, inputs=webcam, outputs=attachments['image'])
+        if args.stream:
+            webcam_stream.change(barcode_capture, inputs=webcam_stream, outputs=attachments['image'])
 
     return demo
 
+
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', "--port", default=7860, type=int,
+                        help="port number")
+    parser.add_argument("--debug", action='store_true',
+                        help="run in debug mode")
+    parser.add_argument("--stream", action='store_true',
+                        help="enable webcam streaming")
+    args = parser.parse_args()
+    return args
 
 if __name__ == '__main__':
     from langchain.llms import HuggingFaceTextGenInference
     from langchain.chat_models import ChatOpenAI
     from langchain.prompts import PromptTemplate
     from langchain.chains import ConversationChain, LLMChain
+
+    args = parse_args()
 
     # llm = HuggingFaceTextGenInference(
     #     inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
@@ -185,4 +203,4 @@ if __name__ == '__main__':
     conversation_chain = ConversationChain(llm=llm, verbose=True)
 
     demo = get_demo()
-    demo.queue().launch(share=True)
+    demo.queue().launch(share=True, server_port=args.port)
