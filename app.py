@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
 
-
 TITLE = "Multimodal Chat Demo"
 
 DESCRIPTION = """Description in Markdown
@@ -28,6 +27,7 @@ PARAMETERS = {
 
 ATTACHMENTS = {
     'image': dict(cls='Image', type="filepath"),
+    'webcam': dict(cls='Image', type="filepath", source="webcam"),
     'audio': dict(cls='Audio', type="filepath"),
     'microphone': dict(cls="Audio", type="filepath", source="microphone"),
     'video': dict(cls="Video"),
@@ -47,7 +47,7 @@ def user(history, msg, *attachments):
     print(_attachments)
     for name, filepath in _attachments.items():
         if filepath is not None:
-            if name in ['image']:
+            if name in ['image', 'webcam']:
                 msg += f'\n<img src="\\file={filepath}" alt="{os.path.basename(filepath)}"/>'
             elif name in ['audio', 'microphone']:
                 msg += f'\n<audio controls><source src="\\file={filepath}">{os.path.basename(filepath)}</audio>'
@@ -104,7 +104,11 @@ def bot(history, instructions, chat_mode, *parameters):
     #     time.sleep(0.05)
     #     yield history
 
-    history[-1][1] = bot_message
+    if isinstance(bot_message, str):
+        history[-1][1] = bot_message
+    else:
+        history[-1][1] = bot_message[0]
+        history.extend([(None, msg) for msg in bot_message[1:]])
     print(chat_mode)
     print({name: value for name, value in zip(PARAMETERS.keys(), parameters)})
     pprint(history)

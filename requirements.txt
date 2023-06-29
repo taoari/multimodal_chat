@@ -1,5 +1,9 @@
 gradio
 python-dotenv
+bs4
+opencv-python
+
+# for llm
 openai
 text_generation
 huggingface_hub
