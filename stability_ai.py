@@ -8,6 +8,41 @@ from stability_sdk import client
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 
 
+def bot(user_message, history, refine=False, prompt_strength=0.6):
+    from utils import parse_message, format_to_message
+
+    msg_dict = parse_message(user_message)
+
+    init_image = None
+    if "images" in msg_dict and len(msg_dict["images"]) >= 1:
+        init_image = msg_dict["images"][-1]
+
+    # set init_image to last image in bot response if in refine mode
+    if init_image is None and refine:
+        for _, _bot_msg in history[:-1][::-1]:
+            _msg_dict = parse_message(_bot_msg)
+            if init_image is None and "images" in _msg_dict and len(_msg_dict["images"]) >= 1:
+                init_image = _msg_dict["images"][-1]
+                break
+
+    if init_image is not None:
+        print(f'Refine from {init_image}')
+
+    img = generate(msg_dict["text"], 
+            init_image=Image.open(init_image) if init_image is not None else None,
+            start_schedule=prompt_strength
+            )
+    if img is not None:
+        import tempfile
+        fname = tempfile.NamedTemporaryFile(prefix='gradio/stability_ai-', suffix='.png').name
+        img.save(fname)
+        bot_message = format_to_message(dict(images=[fname]))
+    else:
+        bot_message = "Sorry, stability.ai failed to generate image."
+
+    return bot_message
+
+
 def generate(prompt, init_image=None, start_schedule=0.6, width=512, height=512,
              engine="stable-diffusion-xl-beta-v2-2-2"):
     """
