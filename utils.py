@@ -11,6 +11,7 @@ NOTE:
   1. can include multiple image files
   2. local files are prefixed with '\\file=' in gradio framework, remote files should have a "://' in the src string
     2.1 local files much be under ${TEMP}/gradio/ in order to be served by gradio
+  3. Only included images for simplicity, audio and video files are similar
 
 Parsed user message is into a dictionary format:
 
