@@ -12,7 +12,6 @@ load_dotenv()  # take environment variables from .env.
 
 DEBUG = True
 
-
 TITLE = "Multimodal Chat Demo"
 
 DESCRIPTION = """
@@ -43,12 +42,6 @@ def user(history, msg, *attachments):
         if filepath is not None:
             if name in ['image', 'webcam']:
                 msg += f'\n<img src="\\file={filepath}" alt="{os.path.basename(filepath)}"/>'
-            elif name in ['audio', 'microphone']:
-                msg += f'\n<audio controls><source src="\\file={filepath}">{os.path.basename(filepath)}</audio>'
-            elif name in ['video']:
-                msg += f'\n<video controls><source src="\\file={filepath}">{os.path.basename(filepath)}</video>'
-            else:
-                msg += f'\n<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return history + [[msg, None]], gr.update(value="", interactive=False), \
         *([gr.update(value=None, interactive=False)] * len(attachments))
 
@@ -63,12 +56,6 @@ def user_upload_file(msg, filepath):
     mtype = mimetypes.guess_type(filepath.name)[0]
     if mtype.startswith('image'):
         msg += f'\n<img src="\\file={filepath.name}" alt="{os.path.basename(filepath.name)}"/>'
-    elif mtype.startswith('audio'):
-        msg += f'\n<audio controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</audio>'
-    elif mtype.startswith('video'):
-        msg += f'\n<video controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</video>'
-    else:
-        msg += f'\n<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
 def bot(history, instructions, chat_mode, *parameters):
@@ -98,6 +85,7 @@ def clear_chat():
     return [], "", *([None] * len(ATTACHMENTS))
 
 def barcode_capture(webcam, output):
+    global CONFIG
     from barcode import get_barcodes_pil
     res, img = get_barcodes_pil(webcam, draw=False)
 
@@ -112,8 +100,6 @@ def barcode_capture(webcam, output):
             CONFIG["barcode_image"] = webcam
         
     return CONFIG["barcode_image"]
-
-
 
 def get_demo():
     global ATTACHMENTS
@@ -140,7 +126,7 @@ def get_demo():
                 with gr.Row():
                     if CONFIG['upload_button']:
                         with gr.Column(scale=0.5, min_width=30):
-                            upload = gr.UploadButton("📁", file_types=["image", "video", "audio", "file"])
+                            upload = gr.UploadButton("📁", file_types=["image", "video", "audio"])
                     with gr.Column(scale=8):
                         msg = gr.Textbox(show_label=False,
                             placeholder="Enter text and press ENTER").style(container=False)
@@ -187,6 +173,7 @@ if __name__ == '__main__':
     from langchain.chains import ConversationChain, LLMChain
 
     args = parse_args()
+    # DEBUG = args.debug # Always in debug mode now
 
     # llm = HuggingFaceTextGenInference(
     #     inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
