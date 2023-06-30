@@ -167,7 +167,7 @@ def get_demo():
                     attachments[name] = getattr(gr, cls_)(**kwargs)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(["Random", "OpenAI", "ChatOpenAI", "StabilityAI", "StabilityAIRefine"], value='ChatOpenAI', show_label=False, 
+                    chat_mode = gr.Radio(["Random", "OpenAI", "ChatOpenAI", "StabilityAI", "StabilityAI (Refine)"], value='ChatOpenAI', show_label=False, 
                         info="")
                 
                 parameters = {}
@@ -214,7 +214,30 @@ def get_demo():
         rerun.click(bot_rerun, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot)
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
+        with gr.Accordion("Examples", open=False) as examples_accordin:
+            examples = gr.Examples(
+                ['rocket ship launching from forest with flower garden under a blue sky, masterful, ghibli',
+                 'crayon drawing of rocket ship launching from forest'],
+                inputs=msg, label="Stability AI Examples",
+            )
     return demo
+
+
+def parse_args():
+    """Parse input arguments."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Multimodal Chatbot',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '-p', '--port', default=7860, type=int,
+        help='port number.')
+    parser.add_argument(
+        '--debug', action='store_true', 
+        help='debug mode.')
+
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == '__main__':
@@ -222,6 +245,8 @@ if __name__ == '__main__':
     from langchain.chat_models import ChatOpenAI
     from langchain.prompts import PromptTemplate
     from langchain.chains import ConversationChain, LLMChain
+
+    args = parse_args()
 
     # llm = HuggingFaceTextGenInference(
     #     inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
@@ -238,4 +263,4 @@ if __name__ == '__main__':
     conversation_chain = ConversationChain(llm=llm, verbose=True)
 
     demo = get_demo()
-    demo.queue().launch(share=True)
+    demo.queue().launch(share=True, server_port=args.port)
