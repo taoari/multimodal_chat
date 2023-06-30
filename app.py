@@ -29,6 +29,8 @@ PARAMETERS = {
     'temperature': dict(cls='Slider', minimum=0, maximum=1, value=1, step=0.1, interactive=True, label="Temperature"),
     'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
     'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
+    'separater': dict(cls='Markdown', value="Image generation parameters:"),
+    'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength"),
 }
 
 ATTACHMENTS = {
@@ -85,6 +87,7 @@ def user_upload_file(msg, filepath):
     return msg
 
 def bot(history, instructions, chat_mode, *parameters):
+    _parameters = {name: value for name, value in zip(PARAMETERS.keys(), parameters)}
     user_message = history[-1][0]
     if chat_mode.startswith('OpenAI'):
         bot_message = conversation_chain.predict(input=user_message)
@@ -110,7 +113,10 @@ def bot(history, instructions, chat_mode, *parameters):
         if init_image is not None:
             print(f'Refine from {init_image}')
 
-        img = stability_ai.generate(msg_dict["text"], init_image=Image.open(init_image) if init_image is not None else None)
+        img = stability_ai.generate(msg_dict["text"], 
+                init_image=Image.open(init_image) if init_image is not None else None,
+                start_schedule=_parameters['prompt_strength']
+                )
         if img is not None:
             import tempfile
             fname = tempfile.NamedTemporaryFile(prefix='gradio/stability_ai-', suffix='.png').name
@@ -140,7 +146,7 @@ def bot(history, instructions, chat_mode, *parameters):
         history[-1][1] = bot_message[0]
         history.extend([(None, msg) for msg in bot_message[1:]])
     print(chat_mode)
-    print({name: value for name, value in zip(PARAMETERS.keys(), parameters)})
+    print(_parameters)
     pprint(history)
     return history
 
