@@ -12,17 +12,44 @@ from utils import parse_message, format_to_message
 
 load_dotenv()  # take environment variables from .env.
 
+# Used for Radio and CheckboxGroup for convert between text and display text
+TEXT2DISPLAY = { 
+        'ai_chat': 'AI Chat', 'ai_create': 'AI Create',
+        'random': 'Random', 'openai': 'OpenAI', 'stabilityai': 'Stability AI',
+        'stateless': 'Stateless', 'stateful': 'Stateful', 'history': 'On-Screen History',
+        'auto': 'Auto', 'yes': 'Yes', 'no': 'No', 'true': 'True', 'false': 'False',
+    }
+
+DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
+
 TITLE = "Multimodal Chat Demo"
 
 DESCRIPTION = """
-* Chat mode:
-  * Random: a chatbot template to randomly generate multimodal responses
-  * OpenAI: stateless raw ChatGPT
-  * ChatOpenAI: stateful (w/ memory) prompt engineered ChatGPT
+## AI Chat
+
+Simply enter text and press ENTER in the textbox to interact with the chatbot.
+
+## AI Create
+
+Upload an image and enter an instruction to edit or enter a description 
+to generate the first image; continually use instructions to refine the editing until satisfactory. 
+
+**TIPS**: 
+
+1. always "Clear" the chat history if want to start brand new, AI Create depends on chatbot latest previous image output; 
+2. "Undo" and re-"Submit" if the generated image is not satisfactory; 
+3. adjust "prompt_strength" (in Parameters) for better authenticity (0.0) or better creativity (1.0); 
 """
 
 DEFAULT_INSTRUCTIONS = """
 """
+
+SETTINGS = {
+    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'])), value=TEXT2DISPLAY['auto'], 
+            interactive=True, label="Chat engine"),
+    'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['stateless', 'stateful', 'history'])), value=TEXT2DISPLAY['stateful'], 
+            interactive=True, label="Chat state"),
+}
 
 PARAMETERS = {
     'max_output_tokens': dict(cls='Slider', minimum=0, maximum=1024, value=512, step=64, interactive=True, label="Max output tokens"),
@@ -30,6 +57,9 @@ PARAMETERS = {
     'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
     'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
     'separater': dict(cls='Markdown', value="Image generation parameters:"),
+    'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
+    # 'translate': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'yes', 'no'])), value=TEXT2DISPLAY['auto'], 
+    #         interactive=True, label="Translate to english or not"),
     'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength"),
 }
 
@@ -42,6 +72,9 @@ ATTACHMENTS = {
     "file": dict(cls="File", type="file"),
     # 'model3d': dict(cls="Model3D"),
 }
+
+
+######################################
 
 CONFIG = {
     'upload_button': True,
@@ -86,18 +119,26 @@ def user_upload_file(msg, filepath):
         msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
-def bot(history, instructions, chat_mode, *parameters):
-    _parameters = {name: value for name, value in zip(PARAMETERS.keys(), parameters)}
+def bot(history, instructions, chat_mode, *args):
+    _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
+    _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
+
+    # convert gr.Radio and gr.CheckboxGroup from display back to text
+    _chat_mode = DISPLAY2TEXT[chat_mode]
+    _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
+    _settings['chat_state'] = DISPLAY2TEXT[_settings['chat_state']]
+
+    # import pdb; pdb.set_trace()
+
+    # Auto select chat engine according chat mode if it is "auto"
+    if _settings['chat_engine'] == 'auto':
+        _settings['chat_engine'] = {'ai_chat': 'openai', 'ai_create': 'stabilityai'}.get(_chat_mode)
+    
     user_message = history[-1][0]
-    if chat_mode.startswith('OpenAI'):
-        bot_message = conversation_chain.predict(input=user_message)
-    elif chat_mode.startswith('ChatOpenAI'):
-        bot_message = llm_chain.run(input=user_message)
-    elif chat_mode.startswith('StabilityAI'):
-        import stability_ai
-        bot_message = stability_ai.bot(user_message, history, 
-            refine='Refine' in chat_mode, prompt_strength=_parameters['prompt_strength'])
-    else:
+    chat_engine, chat_state = _settings['chat_engine'], _settings['chat_state']
+
+    bot_message = None
+    if chat_engine == 'random':
         # Example multimodal messages
         bot_message = random.choice([
             format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
@@ -106,6 +147,24 @@ def bot(history, instructions, chat_mode, *parameters):
             format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
             format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
          ])
+    elif chat_engine == 'openai':
+        if chat_state == 'stateless':
+            bot_message = llm.predict(user_message)
+        elif chat_state == 'stateful':
+            bot_message = conversation_chain.predict(input=user_message)
+        elif chat_state == 'history':
+            pass
+    elif chat_engine == 'stabilityai':
+        import stability_ai
+        refine = chat_state in ['stateful', 'history']
+        bot_message = stability_ai.bot(user_message, history, 
+            refine=refine, prompt_strength=_parameters['prompt_strength'],
+            translate=_parameters['translate'], llm=llm)
+
+    if bot_message is None:
+        bot_message = f'Unsupported **{TEXT2DISPLAY[chat_engine]}** chat engine in **{TEXT2DISPLAY[chat_state]}** state, \
+            please change them in `Settings` and retry!'
+    
     # # streaming
     # history[-1][1] = ""
     # for character in bot_message:
@@ -118,8 +177,8 @@ def bot(history, instructions, chat_mode, *parameters):
     else:
         history[-1][1] = bot_message[0]
         history.extend([(None, msg) for msg in bot_message[1:]])
-    print(chat_mode)
-    print(_parameters)
+
+    print(chat_mode); print(_settings); print(_parameters)
     pprint(history)
     return history
 
@@ -134,26 +193,30 @@ def clear_chat():
     return [], "", *([None] * len(ATTACHMENTS))
 
 def get_demo():
+
+    def _create_from_dict(PARAMS):
+        params = {}
+        for name, kwargs in PARAMS.items():
+            cls_ = kwargs['cls']; del kwargs['cls']
+            params[name] = getattr(gr, cls_)(**kwargs)
+        return params
+    
     with gr.Blocks() as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
-        with gr.Accordion("Description", open=True):
+        with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
             with gr.Column(scale=1):
-                attachments = {}
-                for name, kwargs in ATTACHMENTS.items():
-                    cls_ = kwargs['cls']; del kwargs['cls']
-                    attachments[name] = getattr(gr, cls_)(**kwargs)
+                attachments = _create_from_dict(ATTACHMENTS)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(["Random", "OpenAI", "ChatOpenAI", "StabilityAI", "StabilityAI (Refine)"], value='ChatOpenAI', show_label=False, 
+                    chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat', 'ai_create'])), value=TEXT2DISPLAY['ai_chat'], show_label=False, 
                         info="")
-                
-                parameters = {}
+
+                with gr.Accordion("Settings", open=False) as settings_accordin:
+                    settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
-                    for name, kwargs in PARAMETERS.items():
-                        cls_ = kwargs['cls']; del kwargs['cls']
-                        parameters[name] = getattr(gr, cls_)(**kwargs)
+                    parameters = _create_from_dict(PARAMETERS)
 
                 with gr.Accordion("Instructions", open=False) as instructions_accordin:
                     instructions = gr.Textbox(
@@ -164,7 +227,7 @@ def get_demo():
                     ).style(container=False)
 
             with gr.Column(scale=9):
-                chatbot = gr.Chatbot()
+                chatbot = gr.Chatbot(height=600)
                 with gr.Row():
                     if CONFIG['upload_button']:
                         with gr.Column(scale=0.5, min_width=30):
@@ -183,24 +246,30 @@ def get_demo():
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
+            bot, [chatbot, instructions, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
+            bot, [chatbot, instructions, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
-        with gr.Accordion("Examples", open=True) as examples_accordin:
-            examples = gr.Examples(
-                ['rocket ship launching from forest with flower garden under a blue sky, masterful, ghibli',
-                 'crayon drawing of rocket ship launching from forest'],
-                inputs=msg, label="Stability AI Examples (make sure you are in Stability (Refine) mode)",
+        with gr.Accordion("Examples", open=False) as examples_accordin:
+            chat_examples = gr.Examples(
+                [["What's the Everett interpretation of quantum mechanics?", TEXT2DISPLAY['ai_chat']],
+                 ['Give me a list of the top 10 dive sites you would recommend around the world.', TEXT2DISPLAY['ai_chat']],
+                ],
+                inputs=[msg, chat_mode], label="AI Chat Examples",
+            )
+            create_examples = gr.Examples(
+                [['rocket ship launching from forest with flower garden under a blue sky, masterful, ghibli', TEXT2DISPLAY['ai_create']],
+                 ['crayon drawing of rocket ship launching from forest', TEXT2DISPLAY['ai_create']],
+                ],
+                inputs=[msg, chat_mode], label="AI Create Examples",
             )
     return demo
-
 
 def parse_args():
     """Parse input arguments."""
@@ -226,6 +295,8 @@ if __name__ == '__main__':
     from langchain.chains import ConversationChain, LLMChain
 
     args = parse_args()
+
+    # WARNING: gobal variables are shared accross users, and should be avoided.
 
     # llm = HuggingFaceTextGenInference(
     #     inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",

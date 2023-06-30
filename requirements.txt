@@ -11,3 +11,4 @@ langchain
 
 # stable diffusion
 stability-sdk
+# langdetect

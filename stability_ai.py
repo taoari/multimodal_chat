@@ -6,21 +6,57 @@ from PIL import Image
 from stability_sdk import client
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 
+"""
+https://github.com/Stability-AI/REST-API/issues/21
+  - width: 512
+    height: 512
+  - width: 768
+    height: 512
+  - width: 512
+    height: 768
+  - width: 640
+    height: 512
+  - width: 512
+    height: 640
+  - width: 896
+    height: 512
+  - width: 512
+    height: 896
+"""
+
+def clamp(num, min_value, max_value):
+   return max(min(num, max_value), min_value)
 
 def _preprocess_image(img):
     """init_image: image dimensions must be multiples of 64"""
+    # NOTE: 512, 640, 768, 896 = 128 * [4,5,6,7]
     width, height = img.size
-    new_width, new_height = int(width/64) * 64, int(height/64) * 64
+    if width <= height:
+        w = 512
+        h = int((height/width) * w)
+    else:
+        h = 512
+        w = int((width/height) * h)
+    img = img.resize((w,h))
+    width, height = img.size
+    new_width, new_height = clamp(int(width/128), 4, 7) * 128, clamp(int(height/128), 4, 7) * 128
     if new_width != width or new_height != height:
         left, top = int((width - new_width)/2), int((height-new_height)/2)
         img = img.crop((left, top, left+new_width, top+new_height))
+        print(f'Image is resized: {img.size}')
     return img
 
 
-def bot(user_message, history, refine=False, prompt_strength=0.6):
+def bot(user_message, history, refine=False, prompt_strength=0.6,
+        translate=False, llm=None):
     from utils import parse_message, format_to_message
 
     msg_dict = parse_message(user_message)
+
+    # Stability AI generates better results for English
+    translate = False if llm is None else translate
+    if translate:
+        msg_dict["text"] = llm.predict(f'Translate the following sentence into English: {msg_dict["text"]}')
 
     init_image = None
     if "images" in msg_dict and len(msg_dict["images"]) >= 1:
@@ -45,7 +81,9 @@ def bot(user_message, history, refine=False, prompt_strength=0.6):
         import tempfile
         fname = tempfile.NamedTemporaryFile(prefix='gradio/stability_ai-', suffix='.png').name
         img.save(fname)
-        bot_message = format_to_message(dict(images=[fname]))
+        
+        text = f'<small>Translated prompt: *{msg_dict["text"]}*</small>' if translate else ""
+        bot_message = format_to_message(dict(text=text, images=[fname]))
     else:
         bot_message = "Sorry, stability.ai failed to generate image."
 
