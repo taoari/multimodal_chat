@@ -8,6 +8,16 @@ from stability_sdk import client
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 
 
+def _preprocess_image(img):
+    """init_image: image dimensions must be multiples of 64"""
+    width, height = img.size
+    new_width, new_height = int(width/64) * 64, int(height/64) * 64
+    if new_width != width or new_height != height:
+        left, top = int((width - new_width)/2), int((height-new_height)/2)
+        img = img.crop((left, top, left+new_width, top+new_height))
+    return img
+
+
 def bot(user_message, history, refine=False, prompt_strength=0.6):
     from utils import parse_message, format_to_message
 
@@ -29,7 +39,7 @@ def bot(user_message, history, refine=False, prompt_strength=0.6):
         print(f'Refine from {init_image}')
 
     img = generate(msg_dict["text"], 
-            init_image=Image.open(init_image) if init_image is not None else None,
+            init_image=_preprocess_image(Image.open(init_image)) if init_image is not None else None,
             start_schedule=prompt_strength
             )
     if img is not None:

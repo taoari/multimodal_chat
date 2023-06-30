@@ -168,7 +168,7 @@ def get_demo():
                 with gr.Row():
                     if CONFIG['upload_button']:
                         with gr.Column(scale=0.5, min_width=30):
-                            upload = gr.UploadButton("📁") #, file_types=["image", "video", "audio", "file"])
+                            upload = gr.UploadButton("📁", file_types=["image", "video", "audio", "file"])
                     with gr.Column(scale=8):
                         msg = gr.Textbox(show_label=False,
                             placeholder="Enter text and press ENTER").style(container=False)
