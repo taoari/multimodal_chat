@@ -144,11 +144,11 @@ def bot(history, instructions, chat_mode, *parameters):
     pprint(history)
     return history
 
-def bot_rerun(history, instructions, chat_mode, *parameters):
+def bot_undo(history, user_message):
     if len(history) >= 1:
-        history[-1][1] = None
-    history = bot(history, instructions, chat_mode, *parameters)
-    return history
+        user_message = history[-1][0]
+        return history[:-1], user_message
+    return history, user_message
 
 def clear_chat():
     conversation_chain.memory.clear()
@@ -196,7 +196,7 @@ def get_demo():
                     with gr.Column(scale=1, min_width=60):
                         submit = gr.Button(value="Submit")
                     with gr.Column(scale=1, min_width=60):
-                        rerun = gr.Button(value="Rerun")
+                        undo = gr.Button(value="Undo")
                     with gr.Column(scale=1, min_width=60):
                         # clear = gr.ClearButton([msg, chatbot])
                         clear = gr.Button("Clear") # also clear chatbot memory
@@ -211,14 +211,14 @@ def get_demo():
             bot, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
-        rerun.click(bot_rerun, [chatbot, instructions, chat_mode] + list(parameters.values()), chatbot)
+        undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
-        with gr.Accordion("Examples", open=False) as examples_accordin:
+        with gr.Accordion("Examples", open=True) as examples_accordin:
             examples = gr.Examples(
                 ['rocket ship launching from forest with flower garden under a blue sky, masterful, ghibli',
                  'crayon drawing of rocket ship launching from forest'],
-                inputs=msg, label="Stability AI Examples",
+                inputs=msg, label="Stability AI Examples (make sure you are in Stability (Refine) mode)",
             )
     return demo
 
