@@ -12,13 +12,30 @@ from utils import parse_message, format_to_message
 
 load_dotenv()  # take environment variables from .env.
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 # Used for Radio and CheckboxGroup for convert between text and display text
 TEXT2DISPLAY = { 
         'ai_chat': 'AI Chat', 'ai_create': 'AI Create',
         'random': 'Random', 'openai': 'OpenAI', 'stabilityai': 'Stability AI',
-        'stateless': 'Stateless', 'stateful': 'Stateful', 'history': 'On-Screen History',
+        'stateless': 'Stateless', 'stateless_prompted': 'Stateless (Prompted)', 'stateful': 'Stateful', 'history': 'On-Screen History',
         'auto': 'Auto', 'yes': 'Yes', 'no': 'No', 'true': 'True', 'false': 'False',
     }
+
+
+HF_TEXTGEN_MODELS = ['tiiuae/falcon-7b-instruct', 'google/flan-t5-xxl']
+
+for _name in HF_TEXTGEN_MODELS:
+    TEXT2DISPLAY[_name] = f'HF ({_name})'
 
 DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
 
@@ -41,19 +58,23 @@ to generate the first image; continually use instructions to refine the editing 
 3. adjust "prompt_strength" (in Parameters) for better authenticity (0.0) or better creativity (1.0); 
 """
 
-DEFAULT_INSTRUCTIONS = """
-"""
+DEFAULT_INSTRUCTIONS = """The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
+
+Current conversation:
+{history}
+Human: {input}
+AI:"""
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'])), value=TEXT2DISPLAY['auto'], 
+    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'] + HF_TEXTGEN_MODELS)), value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine"),
-    'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['stateless', 'stateful', 'history'])), value=TEXT2DISPLAY['stateful'], 
+    'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['stateless', 'stateless_prompted', 'history'])), value=TEXT2DISPLAY['history'], 
             interactive=True, label="Chat state"),
 }
 
 PARAMETERS = {
-    'max_output_tokens': dict(cls='Slider', minimum=0, maximum=1024, value=512, step=64, interactive=True, label="Max output tokens"),
-    'temperature': dict(cls='Slider', minimum=0, maximum=1, value=1, step=0.1, interactive=True, label="Temperature"),
+    'temperature': dict(cls='Slider', minimum=0, maximum=1, value=0.7, step=0.1, interactive=True, label="Temperature"),
+    'max_new_tokens': dict(cls='Slider', minimum=0, maximum=1024, value=512, step=64, interactive=True, label="Max new tokens"),
     # 'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
     # 'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
     'separater': dict(cls='Markdown', value="Image generation parameters:"),
@@ -119,47 +140,94 @@ def user_upload_file(msg, filepath):
         msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
-def bot(history, instructions, chat_mode, *args):
-    _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
-    _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
 
-    # convert gr.Radio and gr.CheckboxGroup from display back to text
-    _chat_mode = DISPLAY2TEXT[chat_mode]
-    _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
-    _settings['chat_state'] = DISPLAY2TEXT[_settings['chat_state']]
+def _format_history(history=[], bot_name='AI', user_name='Human'):
+    _history = []
+    for user, bot in history:
+        if user:
+            _history.append(f'{user_name}: {user}')
+        if bot:
+            _history.append(f'{bot_name}: {bot}')
+    return '\n'.join(_history)
 
-    # import pdb; pdb.set_trace()
-
-    # Auto select chat engine according chat mode if it is "auto"
-    if _settings['chat_engine'] == 'auto':
-        _settings['chat_engine'] = {'ai_chat': 'openai', 'ai_create': 'stabilityai'}.get(_chat_mode)
     
-    user_message = history[-1][0]
-    chat_engine, chat_state = _settings['chat_engine'], _settings['chat_state']
+def bot(history, instructions, chat_mode, *args):
+    try:
+        _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
+        _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
 
-    bot_message = None
-    if chat_engine == 'random':
-        # Example multimodal messages
-        bot_message = random.choice([
-            format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
-            format_to_message(dict(text="I hate cat", images=["https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg"])),
-            format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
-            format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
-            format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
-         ])
-    elif chat_engine == 'openai':
-        if chat_state == 'stateless':
-            bot_message = llm.predict(user_message)
-        elif chat_state == 'stateful':
-            bot_message = conversation_chain.predict(input=user_message)
-        elif chat_state == 'history':
-            pass
-    elif chat_engine == 'stabilityai':
-        import stability_ai
-        refine = chat_state in ['stateful', 'history']
-        bot_message = stability_ai.bot(user_message, history, 
-            refine=refine, prompt_strength=_parameters['prompt_strength'],
-            translate=_parameters['translate'], llm=llm)
+        # convert gr.Radio and gr.CheckboxGroup from display back to text
+        _chat_mode = DISPLAY2TEXT[chat_mode]
+        _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
+        _settings['chat_state'] = DISPLAY2TEXT[_settings['chat_state']]
+
+        # Auto select chat engine according chat mode if it is "auto"
+        if _settings['chat_engine'] == 'auto':
+            _settings['chat_engine'] = {'ai_chat': 'openai', 'ai_create': 'stabilityai'}.get(_chat_mode)
+        
+        user_message = history[-1][0]
+        chat_engine, chat_state = _settings['chat_engine'], _settings['chat_state']
+
+        bot_message = None
+        if chat_engine == 'random':
+            # Example multimodal messages
+            bot_message = random.choice([
+                format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
+                format_to_message(dict(text="I hate cat", images=["https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg"])),
+                format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
+                format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
+                format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
+            ])
+        elif chat_engine == 'openai':
+            llm = ChatOpenAI(
+                model_name="gpt-3.5-turbo",
+                temperature=_parameters['temperature'],
+                stop=['\nHuman:', '<|endoftext|>'],
+                verbose=True,
+            )
+            promt = None
+            if chat_state == 'stateless':
+                prompt = user_message
+            elif chat_state == 'stateless_prompted':
+                prompt = DEFAULT_INSTRUCTIONS.format(history="", input=user_message)
+            elif chat_state == 'history':
+                prompt = DEFAULT_INSTRUCTIONS.format(history=_format_history(history[:-1]), input=user_message)
+            if prompt is not None:
+                bot_message = llm.predict(prompt)
+                print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
+        elif chat_engine in HF_TEXTGEN_MODELS:
+            llm = HuggingFaceTextGenInference(
+                inference_server_url=f"https://api-inference.huggingface.co/models/{chat_engine}",
+                temperature=_parameters['temperature'],
+                max_new_tokens=_parameters['max_new_tokens'],
+                stop_sequences=['\nHuman:', '\nUser:', '<|endoftext|>'],
+                verbose=True,
+            )
+            promt = None
+            if chat_state == 'stateless':
+                prompt = user_message
+            elif chat_state == 'stateless_prompted':
+                prompt = DEFAULT_INSTRUCTIONS.format(history="", input=user_message)
+            elif chat_state == 'history':
+                prompt = DEFAULT_INSTRUCTIONS.format(history=_format_history(history[:-1]), input=user_message)
+            if prompt is not None:
+                bot_message = llm.predict(prompt)
+                print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
+    
+        elif chat_engine == 'stabilityai':
+            llm = ChatOpenAI(
+                model_name="gpt-3.5-turbo",
+                temperature=_parameters['temperature'],
+                stop=['\nHuman:', '<|endoftext|>'],
+                verbose=True,
+            )
+            import stability_ai
+            refine = chat_state in ['stateful', 'history']
+            bot_message = stability_ai.bot(user_message, history, 
+                refine=refine, prompt_strength=_parameters['prompt_strength'],
+                translate=_parameters['translate'], llm=llm)
+    except Exception as e:
+        bot_message = 'ERROR: ' + str(e)
 
     if bot_message is None:
         bot_message = f'Unsupported **{TEXT2DISPLAY[chat_engine]}** chat engine in **{TEXT2DISPLAY[chat_state]}** state, \
@@ -189,7 +257,7 @@ def bot_undo(history, user_message):
     return history, user_message
 
 def clear_chat():
-    conversation_chain.memory.clear()
+    # conversation_chain.memory.clear()
     return [], "", *([None] * len(ATTACHMENTS))
 
 def get_demo():
@@ -318,20 +386,21 @@ if __name__ == '__main__':
     # client=<text_generation.client.Client object at 0x000001FABCD86F80>, 
     # async_client=<text_generation.client.AsyncClient object at 0x000001FAC9547880>)
 
-    llm = ChatOpenAI(
-        model_name="gpt-3.5-turbo",
-        stop=['\nHuman:', '<|endoftext|>'],
-    )
+    # llm = ChatOpenAI(
+    #     model_name="gpt-3.5-turbo",
+    #     stop=['\nHuman:', '<|endoftext|>'],
+    # )
 
-    print(repr(llm)) # NOTE: prints private tokens
-    # ChatOpenAI(cache=None, verbose=False, callbacks=None, callback_manager=None, tags=None, 
-    # client=<class 'openai.api_resources.chat_completion.ChatCompletion'>, 
-    # model_name='gpt-3.5-turbo', temperature=0.7, model_kwargs={'stop': ['\nHuman:', '<|endoftext|>']}, 
-    # openai_api_key='...', openai_api_base='', openai_organization='', openai_proxy='', 
-    # request_timeout=None, max_retries=6, streaming=False, n=1, max_tokens=None)
+    # print(repr(llm)) # NOTE: prints private tokens
+    # # ChatOpenAI(cache=None, verbose=False, callbacks=None, callback_manager=None, tags=None, 
+    # # client=<class 'openai.api_resources.chat_completion.ChatCompletion'>, 
+    # # model_name='gpt-3.5-turbo', temperature=0.7, model_kwargs={'stop': ['\nHuman:', '<|endoftext|>']}, 
+    # # openai_api_key='...', openai_api_base='', openai_organization='', openai_proxy='', 
+    # # request_timeout=None, max_retries=6, streaming=False, n=1, max_tokens=None)
 
-    llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template("{input}"), verbose=True)
-    conversation_chain = ConversationChain(llm=llm, verbose=True)
+    # llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template("{input}"), verbose=True)
+    # conversation_chain = ConversationChain(llm=llm, verbose=True)
+    # print(conversation_chain.prompt.template)
 
     demo = get_demo()
     demo.queue().launch(share=True, server_port=args.port)
