@@ -149,7 +149,7 @@ def bot(history, instructions, chat_mode, *args):
                 format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
             ])
         elif chat_engine in ['openai'] or chat_engine in HF_ENDPOINTS:
-            bot_message = llms.bot(history, chat_engine, chat_state, _parameters)
+            bot_message = llms.bot_stream(history, chat_engine, chat_state, _parameters)
         elif chat_engine == 'stabilityai':
             from langchain.chat_models import ChatOpenAI
             llm = ChatOpenAI(
@@ -177,11 +177,16 @@ def bot(history, instructions, chat_mode, *args):
     #     time.sleep(0.05)
     #     yield history
 
-    if isinstance(bot_message, str):
-        history[-1][1] = bot_message
-    else:
-        history[-1][1] = bot_message[0]
-        history.extend([(None, msg) for msg in bot_message[1:]])
+    # if isinstance(bot_message, str):
+    #     history[-1][1] = bot_message
+    # else:
+    #     history[-1][1] = bot_message[0]
+    #     history.extend([(None, msg) for msg in bot_message[1:]])
+    history[-1][1] = ""
+    for character in bot_message:
+        history[-1][1] += character
+        yield history
+    # history[-1][1] = bot_message
 
     print(chat_mode); print(_settings); print(_parameters)
     pprint(history)

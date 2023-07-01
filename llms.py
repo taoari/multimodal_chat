@@ -30,6 +30,32 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+def generator_stop(generator, stop_str):
+    acc_text = ""
+    for ch in generator:
+        acc_text += ch
+        if len(acc_text) > len(stop_str):
+            if stop_str in acc_text:
+                yield acc_text.split(stop_str)[0]
+                return
+            else:
+                yield acc_text[:-len(stop_str)]
+                acc_text = acc_text[-len(stop_str):]
+    yield acc_text
+
+
+def generator_lstrip(generator):
+    first = True
+    for ch in generator:
+        if first:
+            if ch.strip() == "":
+                continue
+            else:
+                first = False
+                yield ch
+        else:
+            yield ch
+
 def parse_endpoints_from_environ():
     global HF_ENDPOINTS
     for name, value in os.environ.items():
@@ -94,7 +120,57 @@ def bot(history, chat_engine, chat_state, _parameters):
         print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
 
     return bot_message
-            
+
+
+def bot_stream(history, chat_engine, chat_state, _parameters):
+    user_message = history[-1][0]
+    
+    instructions, user_name, bot_name = DEFAULT_INSTRUCTIONS, 'Human', 'AI'
+    if 'falcon' in chat_engine:
+        instructions, user_name, bot_name = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon'
+
+    if chat_engine == 'openai':
+        llm = ChatOpenAI(
+            model_name="gpt-3.5-turbo",
+            temperature=_parameters['temperature'],
+            stop=[f'\n{user_name}', '<|endoftext|>'],
+            verbose=True, streaming=True,
+        )
+    elif chat_engine in HF_ENDPOINTS:
+        llm = HuggingFaceTextGenInference(
+            inference_server_url=HF_ENDPOINTS[chat_engine],
+            temperature=_parameters['temperature'],
+            max_new_tokens=_parameters['max_new_tokens'],
+            stop_sequences=[f'\n{user_name}', '<|endoftext|>'],
+            verbose=True, stream=True,
+        )
+    else:
+        raise ValueError(f"Invalid chat engine: {chat_engine}")
+
+    prompt = None
+    bot_message = None
+    if chat_state == 'stateless':
+        prompt = user_message
+    elif chat_state == 'stateless_prompted':
+        prompt = instructions.format(history="", input=user_message)
+    elif chat_state == 'history':
+        prompt = instructions.format(
+            history=_format_history(history[:-1], user_name=user_name, bot_name=bot_name), 
+            input=user_message)
+    
+    STOP_STR = f'\n{user_name}'
+
+    if prompt is not None:
+        # bot_message = llm.predict(prompt).strip() # follow OpenAI convention
+        bot_message = ''
+        for _bot_message in generator_lstrip(generator_stop(llm.predict(prompt), STOP_STR)):
+            bot_message += _bot_message
+            yield _bot_message
+
+        print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
+
+    return bot_message
+
     # llm = HuggingFaceTextGenInference(
     #     inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
     # )
