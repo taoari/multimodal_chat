@@ -54,8 +54,8 @@ SETTINGS = {
 PARAMETERS = {
     'max_output_tokens': dict(cls='Slider', minimum=0, maximum=1024, value=512, step=64, interactive=True, label="Max output tokens"),
     'temperature': dict(cls='Slider', minimum=0, maximum=1, value=1, step=0.1, interactive=True, label="Temperature"),
-    'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
-    'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
+    # 'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
+    # 'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
     'separater': dict(cls='Markdown', value="Image generation parameters:"),
     'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
     # 'translate': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'yes', 'no'])), value=TEXT2DISPLAY['auto'], 
@@ -201,7 +201,12 @@ def get_demo():
             params[name] = getattr(gr, cls_)(**kwargs)
         return params
     
-    with gr.Blocks() as demo:
+    # use css and elem_id to format
+    css="""#chatbot {
+min-height: 600px;
+}"""
+
+    with gr.Blocks(css=css) as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
@@ -224,17 +229,18 @@ def get_demo():
                         value=DEFAULT_INSTRUCTIONS,
                         show_label=False,
                         interactive=True,
-                    ).style(container=False)
+                        container=False,
+                    )
 
             with gr.Column(scale=9):
-                chatbot = gr.Chatbot(height=600)
+                chatbot = gr.Chatbot(elem_id='chatbot')
                 with gr.Row():
                     if CONFIG['upload_button']:
                         with gr.Column(scale=0.5, min_width=30):
                             upload = gr.UploadButton("📁", file_types=["image", "video", "audio", "file"])
                     with gr.Column(scale=8):
                         msg = gr.Textbox(show_label=False,
-                            placeholder="Enter text and press ENTER").style(container=False)
+                            placeholder="Enter text and press ENTER", container=False)
                     with gr.Column(scale=1, min_width=60):
                         submit = gr.Button(value="Submit")
                     with gr.Column(scale=1, min_width=60):
@@ -302,12 +308,27 @@ if __name__ == '__main__':
     #     inference_server_url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
     # )
 
+    # print(repr(llm))
+    
+    # HuggingFaceTextGenInference(cache=None, verbose=False, callbacks=None, callback_manager=None, tags=None, 
+    # max_new_tokens=512, top_k=None, top_p=0.95, typical_p=0.95, temperature=0.8, 
+    # repetition_penalty=None, stop_sequences=[], seed=None, 
+    # inference_server_url='https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct', 
+    # timeout=120, server_kwargs={}, stream=False, 
+    # client=<text_generation.client.Client object at 0x000001FABCD86F80>, 
+    # async_client=<text_generation.client.AsyncClient object at 0x000001FAC9547880>)
+
     llm = ChatOpenAI(
         model_name="gpt-3.5-turbo",
         stop=['\nHuman:', '<|endoftext|>'],
     )
 
     print(repr(llm)) # NOTE: prints private tokens
+    # ChatOpenAI(cache=None, verbose=False, callbacks=None, callback_manager=None, tags=None, 
+    # client=<class 'openai.api_resources.chat_completion.ChatCompletion'>, 
+    # model_name='gpt-3.5-turbo', temperature=0.7, model_kwargs={'stop': ['\nHuman:', '<|endoftext|>']}, 
+    # openai_api_key='...', openai_api_base='', openai_organization='', openai_proxy='', 
+    # request_timeout=None, max_retries=6, streaming=False, n=1, max_tokens=None)
 
     llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template("{input}"), verbose=True)
     conversation_chain = ConversationChain(llm=llm, verbose=True)
