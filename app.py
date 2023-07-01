@@ -65,6 +65,13 @@ Current conversation:
 Human: {input}
 AI:"""
 
+DEFAULT_INSTRUCTIONS_FALCON = """The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Falcon, and a human user, called User. In the following interactions, User and Falcon will converse in natural language, and Falcon will answer User's questions. Falcon was built to be respectful, polite and inclusive. Falcon was built by the Technology Innovation Institute in Abu Dhabi. Falcon will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. The conversation begins.
+
+Current conversation:
+{history}
+User: {input}
+Falcon:"""
+
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'] + HF_TEXTGEN_MODELS)), value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine"),
@@ -195,12 +202,31 @@ def bot(history, instructions, chat_mode, *args):
             if prompt is not None:
                 bot_message = llm.predict(prompt)
                 print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
+        elif chat_engine in HF_TEXTGEN_MODELS and 'falcon' in chat_engine:
+            # special instructions for Falcon to match
+            llm = HuggingFaceTextGenInference(
+                inference_server_url=f"https://api-inference.huggingface.co/models/{chat_engine}",
+                temperature=_parameters['temperature'],
+                max_new_tokens=_parameters['max_new_tokens'],
+                stop_sequences=['\nUser', '<|endoftext|>'],
+                verbose=True,
+            )
+            promt = None
+            if chat_state == 'stateless':
+                prompt = user_message
+            elif chat_state == 'stateless_prompted':
+                prompt = DEFAULT_INSTRUCTIONS_FALCON.format(history="", input=user_message)
+            elif chat_state == 'history':
+                prompt = DEFAULT_INSTRUCTIONS_FALCON.format(history=_format_history(history[:-1], user_name='User', bot_name='Falcon'), input=user_message)
+            if prompt is not None:
+                bot_message = llm.predict(prompt)
+                print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
         elif chat_engine in HF_TEXTGEN_MODELS:
             llm = HuggingFaceTextGenInference(
                 inference_server_url=f"https://api-inference.huggingface.co/models/{chat_engine}",
                 temperature=_parameters['temperature'],
                 max_new_tokens=_parameters['max_new_tokens'],
-                stop_sequences=['\nHuman:', '\nUser:', '<|endoftext|>'],
+                stop_sequences=['\nHuman:', '<|endoftext|>'],
                 verbose=True,
             )
             promt = None
@@ -291,14 +317,15 @@ min-height: 600px;
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
 
-                with gr.Accordion("Instructions", open=False) as instructions_accordin:
-                    instructions = gr.Textbox(
-                        placeholder="LLM instructions",
-                        value=DEFAULT_INSTRUCTIONS,
-                        show_label=False,
-                        interactive=True,
-                        container=False,
-                    )
+                # with gr.Accordion("Instructions", open=False) as instructions_accordin:
+                #     instructions = gr.Textbox(
+                #         placeholder="LLM instructions",
+                #         value=DEFAULT_INSTRUCTIONS,
+                #         show_label=False,
+                #         interactive=True,
+                #         container=False,
+                #     )
+                instructions = gr.State()
 
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot(elem_id='chatbot')
