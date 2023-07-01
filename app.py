@@ -31,11 +31,16 @@ TEXT2DISPLAY = {
         'auto': 'Auto', 'yes': 'Yes', 'no': 'No', 'true': 'True', 'false': 'False',
     }
 
+import huggingface
+from huggingface import ENDPOINTS as HF_ENDPOINTS
 
-HF_TEXTGEN_MODELS = ['tiiuae/falcon-7b-instruct', 'google/flan-t5-xxl']
+huggingface.parse_endpoints_from_environ()
 
-for _name in HF_TEXTGEN_MODELS:
-    TEXT2DISPLAY[_name] = f'HF ({_name})'
+for _name, _value in HF_ENDPOINTS.items():
+    if 'huggingface.co' in _value:
+        TEXT2DISPLAY[_name] = f'HF ({_name})'
+    else:
+        TEXT2DISPLAY[_name] = f'Self-Host ({_name})'
 
 DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
 
@@ -73,7 +78,7 @@ User: {input}
 Falcon:"""
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'] + HF_TEXTGEN_MODELS)), value=TEXT2DISPLAY['auto'], 
+    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'] + list(HF_ENDPOINTS.keys()))), value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine"),
     'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['stateless', 'stateless_prompted', 'history'])), value=TEXT2DISPLAY['history'], 
             interactive=True, label="Chat state"),
@@ -202,10 +207,10 @@ def bot(history, instructions, chat_mode, *args):
             if prompt is not None:
                 bot_message = llm.predict(prompt)
                 print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
-        elif chat_engine in HF_TEXTGEN_MODELS and 'falcon' in chat_engine:
+        elif chat_engine in HF_ENDPOINTS and 'falcon' in chat_engine:
             # special instructions for Falcon to match
             llm = HuggingFaceTextGenInference(
-                inference_server_url=f"https://api-inference.huggingface.co/models/{chat_engine}",
+                inference_server_url=HF_ENDPOINTS[chat_engine],
                 temperature=_parameters['temperature'],
                 max_new_tokens=_parameters['max_new_tokens'],
                 stop_sequences=['\nUser', '<|endoftext|>'],
@@ -221,9 +226,9 @@ def bot(history, instructions, chat_mode, *args):
             if prompt is not None:
                 bot_message = llm.predict(prompt)
                 print(f'{bcolors.OKCYAN}{prompt} {bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
-        elif chat_engine in HF_TEXTGEN_MODELS:
+        elif chat_engine in HF_ENDPOINTS:
             llm = HuggingFaceTextGenInference(
-                inference_server_url=f"https://api-inference.huggingface.co/models/{chat_engine}",
+                inference_server_url=HF_ENDPOINTS[chat_engine],
                 temperature=_parameters['temperature'],
                 max_new_tokens=_parameters['max_new_tokens'],
                 stop_sequences=['\nHuman:', '<|endoftext|>'],
