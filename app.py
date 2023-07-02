@@ -95,9 +95,11 @@ from prompts import PROMPTS, split_prompt
 
 def user(history, msg, instruct, *attachments):
     if instruct not in ["<none>"]:
-        prompt = split_prompt(PROMPTS[instruct]['prompt'])[0] # remove first request example
         if msg:
+            prompt = split_prompt(PROMPTS[instruct]['prompt'])[0] # remove first request example
             prompt = f"{prompt} My first sentence is: {msg}"
+        else:
+            prompt = PROMPTS[instruct]['prompt'] # with first example sentence
         return history + [[prompt, None]], gr.update(value="", interactive=False), \
             gr.update(value="<none>", interactive=False), \
             *([gr.update(interactive=False)] * len(attachments))
@@ -247,7 +249,7 @@ min-height: 600px;
                     chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat', 'ai_create'])), value=TEXT2DISPLAY['ai_chat'], show_label=False, 
                         info="AI Chabot or Image Creation")
                     instruct = gr.Dropdown(choices=list(PROMPTS.keys()), value="<none>", 
-                        interactive=True, label='Chat role', info="Chat role only need to be set once (will be reset to <none> after Submit). We recommand Clear before switch")
+                        interactive=True, label='Chat role', info="Chat role only need to be set once (will be reset to <none> after Submit). We recommand Clear before switch, Undo to modify the first sentence.")
   
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
