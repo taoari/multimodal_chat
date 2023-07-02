@@ -15,8 +15,8 @@ load_dotenv()  # take environment variables from .env.
 # Used for Radio and CheckboxGroup for convert between text and display text
 TEXT2DISPLAY = { 
         'ai_chat': 'AI Chat', 'ai_create': 'AI Create',
-        'random': 'Random', 'openai': 'OpenAI', 'stabilityai': 'Stability AI',
-        'stateless': 'Stateless', 'stateless_prompted': 'Stateless (Prompted)', 'stateful': 'Stateful', 'history': 'On-Screen History',
+        'random': 'Random (for Test)', 'openai': 'OpenAI', 'stabilityai': 'Stability AI',
+        'stateless': 'Stateless', 'stateless_prompted': 'Stateless (Chat Prompted)', 'stateful': 'Stateful', 'history': 'On-Screen History',
         'auto': 'Auto', 'yes': 'Yes', 'no': 'No', 'true': 'True', 'false': 'False',
     }
 
@@ -49,13 +49,14 @@ to generate the first image; continually use instructions to refine the editing 
 
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'] + list(HF_ENDPOINTS.keys()))), value=TEXT2DISPLAY['auto'], 
-            interactive=True, label="Chat engine"),
-    'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['stateless', 'stateless_prompted', 'history'])), value=TEXT2DISPLAY['history'], 
-            interactive=True, label="Chat state"),
+            interactive=True, label="Chat engine", info="For professional usage, if you are not sure, set to auto."),
+    'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'stateless', 'stateless_prompted', 'history'])), value=TEXT2DISPLAY['auto'], 
+            interactive=True, label="Chat state", info="For professional usage, if you are not sure, set to auto."),
 }
 
 PARAMETERS = {
-    'temperature': dict(cls='Slider', minimum=0, maximum=1, value=0.7, step=0.1, interactive=True, label="Temperature"),
+    'temperature': dict(cls='Slider', minimum=0, maximum=1, value=0.7, step=0.1, interactive=True, label="Temperature",
+            info="Lower temperator for determined output; hight temperate for randomness"),
     'max_new_tokens': dict(cls='Slider', minimum=0, maximum=1024, value=512, step=64, interactive=True, label="Max new tokens"),
     # 'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
     # 'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
@@ -63,7 +64,8 @@ PARAMETERS = {
     'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
     # 'translate': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'yes', 'no'])), value=TEXT2DISPLAY['auto'], 
     #         interactive=True, label="Translate to english or not"),
-    'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength"),
+    'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength",
+            info="Low strength for authenticity; high strength for creativity"),
 }
 
 ATTACHMENTS = {
@@ -134,6 +136,8 @@ def bot(history, instructions, chat_mode, *args):
         # Auto select chat engine according chat mode if it is "auto"
         if _settings['chat_engine'] == 'auto':
             _settings['chat_engine'] = {'ai_chat': 'openai', 'ai_create': 'stabilityai'}.get(_chat_mode)
+        if _settings['chat_state'] == 'auto':
+            _settings['chat_state'] = {'ai_chat': 'history', 'ai_create': 'history'}.get(_chat_mode)
         
         user_message = history[-1][0]
         chat_engine, chat_state = _settings['chat_engine'], _settings['chat_state']
@@ -226,7 +230,7 @@ min-height: 600px;
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
                     chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat', 'ai_create'])), value=TEXT2DISPLAY['ai_chat'], show_label=False, 
-                        info="")
+                        info="AI Chabot or Image Creation")
 
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
