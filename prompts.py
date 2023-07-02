@@ -17,3 +17,27 @@ I want you to only reply the translation and nothing else, do not write explanat
 If the input is already in English, simplify reply with the original text. My first sentence is "Aloha!".
 """)
 PROMPTS.update({_to_command(prompt['act']): prompt for prompt in dataset['train']})
+
+
+def split_prompt(prompt):
+    """Split original prompt into pure instruction prompt and first request/sentence/command
+    
+    NOTE: may not accurate for some instances due to the diverse of the prompts"""
+    for stop in ['My first', 'my first', 'First inquiry', 'First request']:
+        res = prompt.rsplit(stop, maxsplit=1)
+        if len(res) == 2:
+            return res[0].strip(), stop + res[1]
+    return prompt, None
+
+
+def test_split_prompt():
+    for k, v in PROMPTS.items():
+        instr, first = split_prompt(v['prompt'])
+        print(k, first)
+
+def test_split_prompt_no_first():
+    for k, v in PROMPTS.items():
+        instr, first = split_prompt(v['prompt'])
+        if first is None:
+            print(k, instr)
+        

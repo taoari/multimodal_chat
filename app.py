@@ -35,6 +35,9 @@ DESCRIPTION = """
 
 Simply enter text and press ENTER in the textbox to interact with the chatbot.
 
+* Features:
+  * Chat role integration with [Awesome ChatGPT prompts](https://github.com/f/awesome-chatgpt-prompts).
+
 ## AI Create
 
 Upload an image and enter an instruction to edit or enter a description 
@@ -88,11 +91,14 @@ if CONFIG['upload_button']:
     ATTACHMENTS = {}
 
 
-from prompts import PROMPTS
+from prompts import PROMPTS, split_prompt
 
 def user(history, msg, instruct, *attachments):
-    if instruct not in ["", "<none>"]:
-        return history + [[PROMPTS[instruct]['prompt'], None]], gr.update(interactive=False), \
+    if instruct not in ["<none>"]:
+        prompt = split_prompt(PROMPTS[instruct]['prompt'])[0] # remove first request example
+        if msg:
+            prompt = f"{prompt} My first sentence is: {msg}"
+        return history + [[prompt, None]], gr.update(value="", interactive=False), \
             gr.update(value="<none>", interactive=False), \
             *([gr.update(interactive=False)] * len(attachments))
     else:
@@ -240,7 +246,9 @@ min-height: 600px;
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
                     chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat', 'ai_create'])), value=TEXT2DISPLAY['ai_chat'], show_label=False, 
                         info="AI Chabot or Image Creation")
-
+                    instruct = gr.Dropdown(choices=list(PROMPTS.keys()), value="<none>", 
+                        interactive=True, label='Chat role', info="Chat role only need to be set once (will be reset to <none> after Submit). We recommand Clear before switch")
+  
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
@@ -262,9 +270,6 @@ min-height: 600px;
                     if CONFIG['upload_button']:
                         with gr.Column(scale=0.5, min_width=30):
                             upload = gr.UploadButton("📁", file_types=["image", "video", "audio", "file"])
-                    with gr.Column(scale=2, min_width=60):
-                        instruct = gr.Dropdown(choices=list(PROMPTS.keys()), value="<none>", 
-                                interactive=True, container=False, show_label=False)
                     with gr.Column(scale=8):
                         msg = gr.Textbox(show_label=False,
                             placeholder="Enter text and press ENTER", container=False)
