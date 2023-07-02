@@ -12,3 +12,6 @@ langchain
 # stable diffusion
 stability-sdk
 # langdetect
+
+# for prompts
+datasets

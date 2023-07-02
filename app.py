@@ -87,28 +87,37 @@ CONFIG = {
 if CONFIG['upload_button']:
     ATTACHMENTS = {}
 
-def user(history, msg, *attachments):
-    _attachments = {name: filepath for name, filepath in zip(ATTACHMENTS.keys(), attachments)}
-    print(_attachments)
-    msg_dict = dict(text=msg, images=[], audios=[], videos=[], files=[])
-    for name, filepath in _attachments.items():
-        if filepath is not None:
-            if name in ['image', 'webcam']:
-                msg_dict['images'].append(filepath)
-            elif name in ['audio', 'microphone']:
-                msg_dict['audios'].append(filepath)
-            elif name in ['video']:
-                msg_dict['videos'].append(filepath)
-            else:
-                msg_dict['files'].append(filepath)
-    return history + [[format_to_message(msg_dict), None]], gr.update(value="", interactive=False), \
-        *([gr.update(value=None, interactive=False)] * len(attachments))
+
+from prompts import PROMPTS
+
+def user(history, msg, instruct, *attachments):
+    if instruct not in ["", "<none>"]:
+        return history + [[PROMPTS[instruct]['prompt'], None]], gr.update(interactive=False), \
+            gr.update(value="<none>", interactive=False), \
+            *([gr.update(interactive=False)] * len(attachments))
+    else:
+        _attachments = {name: filepath for name, filepath in zip(ATTACHMENTS.keys(), attachments)}
+        print(_attachments)
+        msg_dict = dict(text=msg, images=[], audios=[], videos=[], files=[])
+        for name, filepath in _attachments.items():
+            if filepath is not None:
+                if name in ['image', 'webcam']:
+                    msg_dict['images'].append(filepath)
+                elif name in ['audio', 'microphone']:
+                    msg_dict['audios'].append(filepath)
+                elif name in ['video']:
+                    msg_dict['videos'].append(filepath)
+                else:
+                    msg_dict['files'].append(filepath)
+        return history + [[format_to_message(msg_dict), None]], gr.update(value="", interactive=False), \
+            gr.update(value="<none>", interactive=False), \
+            *([gr.update(value=None, interactive=False)] * len(attachments))
 
 def user_post():
     if len(ATTACHMENTS) == 0:
-        return gr.update(interactive=True)
+        return gr.update(interactive=True), gr.update(interactive=True)
     else:
-        return gr.update(interactive=True), *([gr.update(interactive=True)] * len(ATTACHMENTS))
+        return gr.update(interactive=True), gr.update(interactive=True), *([gr.update(interactive=True)] * len(ATTACHMENTS))
 
 def user_upload_file(msg, filepath):
     # history = history + [((file.name,), None)]
@@ -253,6 +262,9 @@ min-height: 600px;
                     if CONFIG['upload_button']:
                         with gr.Column(scale=0.5, min_width=30):
                             upload = gr.UploadButton("📁", file_types=["image", "video", "audio", "file"])
+                    with gr.Column(scale=2, min_width=60):
+                        instruct = gr.Dropdown(choices=list(PROMPTS.keys()), value="<none>", 
+                                interactive=True, container=False, show_label=False)
                     with gr.Column(scale=8):
                         msg = gr.Textbox(show_label=False,
                             placeholder="Enter text and press ENTER", container=False)
@@ -266,14 +278,14 @@ min-height: 600px;
 
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
-        msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
+        msg.submit(user, [chatbot, msg, instruct] + list(attachments.values()), [chatbot, msg, instruct] + list(attachments.values()), queue=False).then(
             bot, [chatbot, instructions, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot
         ).then(
-            user_post, None, [msg] + list(attachments.values()), queue=False)
-        submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
+            user_post, None, [msg, instruct] + list(attachments.values()), queue=False)
+        submit.click(user, [chatbot, msg, instruct] + list(attachments.values()), [chatbot, msg, instruct] + list(attachments.values()), queue=False).then(
             bot, [chatbot, instructions, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot
         ).then(
-            user_post, None, [msg] + list(attachments.values()), queue=False)
+            user_post, None, [msg, instruct] + list(attachments.values()), queue=False)
         undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
