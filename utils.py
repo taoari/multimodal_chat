@@ -1,5 +1,6 @@
 import os
 from bs4 import BeautifulSoup
+import gradio as gr
 
 
 """User message should be in the following format for multimodal input:
@@ -45,9 +46,10 @@ def parse_message(message):
     res["audios"] = [_trim_local_file(audio.source.get("src")) for audio in soup.find_all('audio')]
     res["videos"] = [_trim_local_file(video.source.get("src")) for video in soup.find_all('video')]
     res["files"] = [_trim_local_file(a.get("href")) for a in soup.find_all('a')]
+    res["buttons"] = [btn.text for btn in soup.find_all('button')]
     
     # exclude img, audio, video, href texts in "text"
-    for tag in ['img', 'audio', 'video', 'a']:
+    for tag in ['img', 'audio', 'video', 'a', 'button']:
         for unwanted in soup.select(tag):
             unwanted.extract()
     res["text"] = soup.text.strip()
@@ -71,4 +73,47 @@ def format_to_message(res):
         for filepath in res["files"]:
             filepath = _prefix_local_file(filepath)
             msg += f'<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
+    if "buttons" in res:
+        msg += '<br />'
+        for btn in res["buttons"]:
+            # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
+            msg += f' <button type="button" class="btn btn-primary btn-chatbot">{btn}</button>'
     return msg
+
+
+def reload_javascript():
+    """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
+    """
+    print("Reloading javascript...")
+    js = """
+// for bootstrap
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+
+// for message buttons to work
+<script>
+function registerMessageButtons() {
+	const collection = document.querySelectorAll(".btn-chatbot");
+	for (let i = 0; i < collection.length; i++) {
+      // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
+	  collection[i].onclick=function() {document.getElementById("inputTextBox").getElementsByTagName('textarea')[0].value = collection[i].innerHTML};
+	}
+}
+// need to make sure registerMessageButtons() is executed all the time as new message can come out;
+var intervalId = window.setInterval(function(){
+  registerMessageButtons();
+}, 1000);
+</script>
+"""
+    def template_response(*args, **kwargs):
+        res = GradioTemplateResponseOriginal(*args, **kwargs)
+        # soup = BeautifulSoup(res.body, 'html.parser')
+        # # NOTE: gradio UI is rendered by JavaScript, so can not find btn-chatbot
+        # res.body = str(soup).replace('</html>', f'{js}</html>').encode('utf8')
+        res.body = res.body.replace(b'</html>', f'{js}</html>'.encode("utf8"))
+        res.init_headers()
+        return res
+
+    gr.routes.templates.TemplateResponse = template_response
+
+GradioTemplateResponseOriginal = gr.routes.templates.TemplateResponse

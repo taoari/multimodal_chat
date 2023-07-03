@@ -168,6 +168,7 @@ def bot(history, instructions, chat_mode, *args):
                 format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
                 format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
                 format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
+                format_to_message(dict(text="Hello, how can I assist you today?", buttons=['Primary', 'Secondary'])),
             ])
         elif chat_engine in ['openai'] or chat_engine in HF_ENDPOINTS:
             bot_message = llms.bot_stream(history, chat_engine, chat_state, _parameters)
@@ -273,8 +274,9 @@ min-height: 600px;
                         with gr.Column(scale=0.5, min_width=30):
                             upload = gr.UploadButton("📁", file_types=["image", "video", "audio", "file"])
                     with gr.Column(scale=8):
+                        # NOTE: elem_id for chatbot message buttons to work
                         msg = gr.Textbox(show_label=False,
-                            placeholder="Enter text and press ENTER", container=False)
+                            placeholder="Enter text and press ENTER", container=False, elem_id="inputTextBox")
                     with gr.Column(scale=1, min_width=60):
                         submit = gr.Button(value="Submit")
                     with gr.Column(scale=1, min_width=60):
@@ -335,4 +337,6 @@ if __name__ == '__main__':
     # WARNING: gobal variables are shared accross users, and should be avoided.
 
     demo = get_demo()
+    from utils import reload_javascript
+    reload_javascript()
     demo.queue().launch(share=True, server_port=args.port)
