@@ -6,10 +6,12 @@ load_dotenv()  # take environment variables from .env.
 
 import app_template
 import app_chat
+import app_create
 
 TABS = {
     'AI Chat': app_chat.get_demo,
-    'Template': app_template.get_demo,
+    'AI Create': app_create.get_demo,
+    # 'Template': app_template.get_demo,
 }
 
 def get_demo():

@@ -12,25 +12,37 @@ load_dotenv()  # take environment variables from .env.
 
 # Used for Radio, CheckboxGroup, Dropdown for convert between text and display text
 TEXT2DISPLAY = { 
-        'auto': 'Auto', 'random': 'Random', 'openai': 'OpenAI', # for chat engine
+        'auto': 'Auto', 'stabilityai': 'StabilitiyAI', 'dalle2': 'DALL·E 2', # for chat engine
     }
 
 DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
 
 #################################################################################
 
-TITLE = "Multimodal Chatbot Template"
+TITLE = "AI Create"
 
 DESCRIPTION = """
-Markdown description here.
+# AI Create
+
+Upload an image and enter an instruction to edit or enter a description 
+to generate the first image; continually use instructions to refine the editing until satisfactory. 
+
+**TIPS**: 
+
+1. always "Clear" the chat history if want to start brand new, AI Create depends on chatbot latest previous image output; 
+2. "Undo" and re-"Submit" if the generated image is not satisfactory; 
+3. adjust "prompt_strength" (in Parameters) for better authenticity (0.0) or better creativity (1.0); 
 """
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai'])), value=TEXT2DISPLAY['auto'], 
+    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'stabilityai', 'dalle2'])), value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine"),
 }
 
 PARAMETERS = {
+    'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
+    'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength",
+            info="Low strength for authenticity; high strength for creativity"),
 }
 
 ATTACHMENTS = {
@@ -94,8 +106,7 @@ def bot(history, *args):
     # 1. convert gr.Radio and gr.CheckboxGroup from display back to text
     # 2. auto select chat engine according chat mode if it is "auto"
     _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
-    if _settings['chat_engine'] == 'auto':
-        _settings['chat_engine'] = 'random'
+    _settings['chat_engine'] = 'stabilityai' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
     
     user_message = history[-1][0]
     chat_engine = _settings['chat_engine']
@@ -104,18 +115,18 @@ def bot(history, *args):
         # recommend to write as external functions:
         #   bot_message = <mod>.bot(user_message, **kwargs)
         bot_message = None
-        if chat_engine == 'random':
-            # Example multimodal messages
-            bot_message = random.choice([
-                format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
-                format_to_message(dict(text="I hate cat", images=["https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg"])),
-                format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
-                format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
-                format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
-                format_to_message(dict(text="Hello, how can I assist you today?", buttons=['Primary', 'Secondary'])),
-            ])
-        elif chat_engine == 'openai':
-            raise NotImplementedError(f"Placeholder: {chat_engine} not implemented")
+        if chat_engine == 'stabilityai':
+            from langchain.chat_models import ChatOpenAI
+            llm = ChatOpenAI(
+                model_name="gpt-3.5-turbo",
+                temperature=0,
+                verbose=True,
+            )
+            import stability_ai
+            refine = True
+            bot_message = stability_ai.bot(user_message, history, 
+                refine=refine, prompt_strength=_parameters['prompt_strength'],
+                translate=_parameters['translate'], llm=llm)
         
     except Exception as e:
         bot_message = 'ERROR: ' + str(e)

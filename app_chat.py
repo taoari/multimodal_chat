@@ -14,7 +14,7 @@ load_dotenv()  # take environment variables from .env.
 
 # Used for Radio and CheckboxGroup for convert between text and display text
 TEXT2DISPLAY = { 
-        'ai_chat': 'AI Chat', 'ai_create': 'AI Create',
+        'ai_chat': 'AI Chat', 'ai_create': 'AI Create (Deprecated)',
         'random': 'Random (for Test)', 'openai': 'OpenAI', 'stabilityai': 'Stability AI',
         'stateless': 'Stateless', 'stateless_prompted': 'Stateless (Chat Prompted)', 'stateful': 'Stateful', 'history': 'On-Screen History',
         'auto': 'Auto', 'yes': 'Yes', 'no': 'No', 'true': 'True', 'false': 'False',
