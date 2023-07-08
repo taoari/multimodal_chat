@@ -205,12 +205,11 @@ min-height: 600px;
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
         with gr.Accordion("Examples", open=False) as examples_accordin:
-            chat_examples = gr.Examples(
-                ["What's the Everett interpretation of quantum mechanics?",
-                 'Give me a list of the top 10 dive sites you would recommend around the world.',
-                 'Write a Python code to calculate Fibonacci numbers.'
+            create_examples = gr.Examples(
+                ['rocket ship launching from forest with flower garden under a blue sky, masterful, ghibli',
+                 'crayon drawing of rocket ship launching from forest',
                 ],
-                inputs=msg, label="AI Chat Examples",
+                inputs=msg, label="AI Create Examples",
             )
     return demo
 

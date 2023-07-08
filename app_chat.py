@@ -14,8 +14,8 @@ load_dotenv()  # take environment variables from .env.
 
 # Used for Radio and CheckboxGroup for convert between text and display text
 TEXT2DISPLAY = { 
-        'ai_chat': 'AI Chat', 'ai_create': 'AI Create',
-        'random': 'Random (for Test)', 'openai': 'OpenAI', 'stabilityai': 'Stability AI',
+        'ai_chat': 'AI Chat',
+        'random': 'Random (for Test)', 'openai': 'OpenAI',
         'stateless': 'Stateless', 'stateless_prompted': 'Stateless (Chat Prompted)', 'stateful': 'Stateful', 'history': 'On-Screen History',
         'auto': 'Auto', 'yes': 'Yes', 'no': 'No', 'true': 'True', 'false': 'False',
     }
@@ -28,30 +28,19 @@ llms.register_endpoints_to_text2display(TEXT2DISPLAY)
 
 DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
 
-TITLE = "Multimodal Chat Demo"
+TITLE = "AI Chat"
 
 DESCRIPTION = """
-## AI Chat
+# AI Chat
 
 Simply enter text and press ENTER in the textbox to interact with the chatbot.
 
 * Features:
   * Chat role integration with [Awesome ChatGPT prompts](https://github.com/f/awesome-chatgpt-prompts).
-
-## AI Create
-
-Upload an image and enter an instruction to edit or enter a description 
-to generate the first image; continually use instructions to refine the editing until satisfactory. 
-
-**TIPS**: 
-
-1. always "Clear" the chat history if want to start brand new, AI Create depends on chatbot latest previous image output; 
-2. "Undo" and re-"Submit" if the generated image is not satisfactory; 
-3. adjust "prompt_strength" (in Parameters) for better authenticity (0.0) or better creativity (1.0); 
 """
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai', 'stabilityai'] + list(HF_ENDPOINTS.keys()))), value=TEXT2DISPLAY['auto'], 
+    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai'] + list(HF_ENDPOINTS.keys()))), value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine", info="For professional usage, if you are not sure, set to auto."),
     'chat_state': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'stateless', 'stateless_prompted', 'history'])), value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat state", info="For professional usage, if you are not sure, set to auto."),
@@ -152,9 +141,9 @@ def bot(history, instructions, chat_mode, *args):
 
         # Auto select chat engine according chat mode if it is "auto"
         if _settings['chat_engine'] == 'auto':
-            _settings['chat_engine'] = {'ai_chat': 'openai', 'ai_create': 'stabilityai'}.get(_chat_mode)
+            _settings['chat_engine'] = {'ai_chat': 'openai'}.get(_chat_mode)
         if _settings['chat_state'] == 'auto':
-            _settings['chat_state'] = {'ai_chat': 'history', 'ai_create': 'history'}.get(_chat_mode)
+            _settings['chat_state'] = {'ai_chat': 'history'}.get(_chat_mode)
         
         user_message = history[-1][0]
         chat_engine, chat_state = _settings['chat_engine'], _settings['chat_state']
@@ -172,19 +161,6 @@ def bot(history, instructions, chat_mode, *args):
             ])
         elif chat_engine in ['openai'] or chat_engine in HF_ENDPOINTS:
             bot_message = llms.bot_stream(history, chat_engine, chat_state, _parameters)
-        elif chat_engine == 'stabilityai':
-            from langchain.chat_models import ChatOpenAI
-            llm = ChatOpenAI(
-                model_name="gpt-3.5-turbo",
-                temperature=_parameters['temperature'],
-                stop=['\nHuman:', '<|endoftext|>'],
-                verbose=True,
-            )
-            import stability_ai
-            refine = chat_state in ['stateful', 'history']
-            bot_message = stability_ai.bot(user_message, history, 
-                refine=refine, prompt_strength=_parameters['prompt_strength'],
-                translate=_parameters['translate'], llm=llm)
     except Exception as e:
         bot_message = 'ERROR: ' + str(e)
 
@@ -247,8 +223,7 @@ min-height: 600px;
                 attachments = _create_from_dict(ATTACHMENTS)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat', 'ai_create'])), value=TEXT2DISPLAY['ai_chat'], show_label=False, 
-                        info="AI Chabot or Image Creation")
+                    chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat'])), value=TEXT2DISPLAY['ai_chat'], show_label=False)
                     instruct = gr.Dropdown(choices=list(PROMPTS.keys()), value="<none>", 
                         interactive=True, label='Chat role', info="Chat role only need to be set once (will be reset to <none> after Submit). We recommand Clear before switch, Undo to modify the first sentence.")
   
@@ -305,12 +280,6 @@ min-height: 600px;
                  ['Write a Python code to calculate Fibonacci numbers.', TEXT2DISPLAY['ai_chat']],
                 ],
                 inputs=[msg, chat_mode], label="AI Chat Examples",
-            )
-            create_examples = gr.Examples(
-                [['rocket ship launching from forest with flower garden under a blue sky, masterful, ghibli', TEXT2DISPLAY['ai_create']],
-                 ['crayon drawing of rocket ship launching from forest', TEXT2DISPLAY['ai_create']],
-                ],
-                inputs=[msg, chat_mode], label="AI Create Examples",
             )
     return demo
 
