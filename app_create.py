@@ -58,7 +58,7 @@ ATTACHMENTS = {
 #################################################################################
 
 CONFIG = {
-    'upload_button': True,
+    'upload_button': False,
 }
 
 def user(history, msg, *attachments):
@@ -97,7 +97,7 @@ def user_upload_file(msg, filepath):
         msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
-def bot(history, *args):
+def bot(history, image_mask, *args):
 
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
@@ -112,21 +112,29 @@ def bot(history, *args):
     chat_engine = _settings['chat_engine']
 
     try:
+        # image_mask = dict(image=None, mask=None) if image_mask is None else image_mask
         # recommend to write as external functions:
         #   bot_message = <mod>.bot(user_message, **kwargs)
         bot_message = None
         if chat_engine == 'stabilityai':
-            from langchain.chat_models import ChatOpenAI
-            llm = ChatOpenAI(
-                model_name="gpt-3.5-turbo",
-                temperature=0,
-                verbose=True,
-            )
-            import stability_ai
-            refine = True
-            bot_message = stability_ai.bot(user_message, history, 
-                refine=refine, prompt_strength=_parameters['prompt_strength'],
-                translate=_parameters['translate'], llm=llm)
+            pass
+            # import stability_ai
+            # img = stability_ai.generate(user_message, 
+            #         init_image=image_mask['image'],
+            #         mask_image=image_mask['mask'],
+            #         start_schedule=_parameters['prompt_strength'])
+            # image_mask['image'] = img
+            # from langchain.chat_models import ChatOpenAI
+            # llm = ChatOpenAI(
+            #     model_name="gpt-3.5-turbo",
+            #     temperature=0,
+            #     verbose=True,
+            # )
+            # import stability_ai
+            # refine = True
+            # bot_message = stability_ai.bot(user_message, history, 
+            #     refine=refine, prompt_strength=_parameters['prompt_strength'],
+            #     translate=_parameters['translate'], llm=llm)
         
     except Exception as e:
         bot_message = 'ERROR: ' + str(e)
@@ -134,8 +142,8 @@ def bot(history, *args):
     history[-1][1] = bot_message
 
     print(_settings); print(_parameters)
-    pprint(history)
-    return history
+    pprint(history); print(image_mask.keys() if image_mask is not None else None)
+    return history, image_mask # ['image'] if image_mask is not None else None
 
 def bot_undo(history, user_message):
     if len(history) >= 1:
@@ -172,6 +180,12 @@ min-height: 600px;
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
+                with gr.Accordion("Image mask", open=True) as image_mask_accordin:
+                    # image_mask = gr.Image(source='upload', tool='sketch', interactive=True)
+                    image_mask = gr.ImageMask(type='pil')
+                    image_mask_output = gr.Image(interactive=False)
+
+                    image_mask.edit(lambda x: x['mask'] if x is not None else None, inputs=image_mask, outputs=image_mask_output)
 
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot(elem_id='chatbot')
@@ -194,11 +208,11 @@ min-height: 600px;
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot] + list(settings.values()) + list(parameters.values()), chatbot,
+            bot, [chatbot, image_mask] + list(settings.values()) + list(parameters.values()), [chatbot, image_mask],
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot] + list(settings.values()) + list(parameters.values()), chatbot,
+            bot, [chatbot, image_mask] + list(settings.values()) + list(parameters.values()), [chatbot, image_mask],
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         undo.click(bot_undo, [chatbot, msg], [chatbot, msg])

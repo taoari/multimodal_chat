@@ -90,7 +90,7 @@ def bot(user_message, history, refine=False, prompt_strength=0.6,
     return bot_message
 
 
-def generate(prompt, init_image=None, start_schedule=0.6, width=512, height=512,
+def generate(prompt, init_image=None, mask_image=None, start_schedule=0.6, width=512, height=512,
              engine="stable-diffusion-xl-beta-v2-2-2"):
     """
     Parameters:
@@ -110,7 +110,7 @@ def generate(prompt, init_image=None, start_schedule=0.6, width=512, height=512,
         # stable-diffusion-512-v2-1 stable-diffusion-768-v2-1 stable-diffusion-xl-beta-v2-2-2 stable-inpainting-v1-0 stable-inpainting-512-v2-0
     )
 
-    kwargs = dict(init_image=init_image, start_schedule=start_schedule) if init_image is not None else {}
+    kwargs = dict(init_image=init_image, mask_image=mask_image, start_schedule=start_schedule)
 
     # Set up our initial generation parameters.
     answers = stability_api.generate(
