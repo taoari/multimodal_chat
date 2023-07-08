@@ -34,7 +34,7 @@ DESCRIPTION = """
 * Enter editing instruction in text box and hit ENTER
 * Use image mask for **local image editing**
 * **TIPS**:
-  * **Drag and drop** an image from Chatbot to Workspace to quickly change the image to work on
+  * **Drag and drop** an image from Chatbot to Workspace (both "Image work on" and "Draw mask") to quickly change the image to work on
   * Use `prompt_strength` to balance authenticity and creativity
   * Adjust `gaussian_blur_radius` to better integrate with background if mask is used
 """
@@ -146,7 +146,7 @@ def bot(history, image, mask, *args):
                     temperature=0,
                     verbose=True,
                 )
-                _user_message = llm.predict(f'Translate the following sentence into English: ```{user_message}```')
+                _user_message = llm.predict(f'Translate the following sentence into English (return original text if it is already in English): {user_message}')
             else:
                 _user_message = user_message
 

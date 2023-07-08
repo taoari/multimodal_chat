@@ -52,12 +52,6 @@ PARAMETERS = {
     'max_new_tokens': dict(cls='Slider', minimum=0, maximum=1024, value=512, step=64, interactive=True, label="Max new tokens"),
     # 'top_k': dict(cls='Slider', minimum=1, maximum=5, value=3, step=1, interactive=True, label="Top K"),
     # 'top_p': dict(cls='Slider', minimum=0, maximum=1, value=0.9, step=0.1, interactive=True, label="Top p"),
-    'separater': dict(cls='Markdown', value="Image generation parameters:"),
-    'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
-    # 'translate': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'yes', 'no'])), value=TEXT2DISPLAY['auto'], 
-    #         interactive=True, label="Translate to english or not"),
-    'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength",
-            info="Low strength for authenticity; high strength for creativity"),
 }
 
 ATTACHMENTS = {
@@ -223,7 +217,8 @@ min-height: 600px;
                 attachments = _create_from_dict(ATTACHMENTS)
 
                 with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat'])), value=TEXT2DISPLAY['ai_chat'], show_label=False)
+                    # chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat'])), value=TEXT2DISPLAY['ai_chat'], show_label=False)
+                    chat_mode = gr.State('AI Chat')
                     instruct = gr.Dropdown(choices=list(PROMPTS.keys()), value="<none>", 
                         interactive=True, label='Chat role', info="Chat role only need to be set once (will be reset to <none> after Submit). We recommand Clear before switch, Undo to modify the first sentence.")
   
