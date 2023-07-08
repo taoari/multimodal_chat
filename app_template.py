@@ -12,7 +12,6 @@ load_dotenv()  # take environment variables from .env.
 
 # Used for Radio, CheckboxGroup, Dropdown for convert between text and display text
 TEXT2DISPLAY = { 
-        'ai_chat': 'AI Chat', # for chat mode
         'auto': 'Auto', 'random': 'Random', 'openai': 'OpenAI', # for chat engine
     }
 
@@ -86,7 +85,7 @@ def user_upload_file(msg, filepath):
         msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
-def bot(history, chat_mode, *args):
+def bot(history, *args):
 
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
@@ -96,7 +95,7 @@ def bot(history, chat_mode, *args):
     # 2. auto select chat engine according chat mode if it is "auto"
     _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
     if _settings['chat_engine'] == 'auto':
-        _settings['chat_engine'] = {'ai_chat': 'random'}.get(DISPLAY2TEXT[chat_mode])
+        _settings['chat_engine'] = 'random'
     
     user_message = history[-1][0]
     chat_engine = _settings['chat_engine']
@@ -123,7 +122,7 @@ def bot(history, chat_mode, *args):
 
     history[-1][1] = bot_message
 
-    print(chat_mode); print(_settings); print(_parameters)
+    print(_settings); print(_parameters)
     pprint(history)
     return history
 
@@ -158,9 +157,6 @@ min-height: 600px;
         with gr.Row():
             with gr.Column(scale=1):
                 attachments = _create_from_dict(ATTACHMENTS)
-                with gr.Accordion("Chat mode", open=True) as chat_mode_accordin:
-                    chat_mode = gr.Radio(list(map(TEXT2DISPLAY.get, ['ai_chat'])), value=TEXT2DISPLAY['ai_chat'], show_label=False, 
-                        info="AI Chabot")
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
@@ -187,11 +183,11 @@ min-height: 600px;
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot,
+            bot, [chatbot] + list(settings.values()) + list(parameters.values()), chatbot,
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot,
+            bot, [chatbot] + list(settings.values()) + list(parameters.values()), chatbot,
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
@@ -199,11 +195,11 @@ min-height: 600px;
 
         with gr.Accordion("Examples", open=False) as examples_accordin:
             chat_examples = gr.Examples(
-                [["What's the Everett interpretation of quantum mechanics?", TEXT2DISPLAY['ai_chat']],
-                 ['Give me a list of the top 10 dive sites you would recommend around the world.', TEXT2DISPLAY['ai_chat']],
-                 ['Write a Python code to calculate Fibonacci numbers.', TEXT2DISPLAY['ai_chat']],
+                ["What's the Everett interpretation of quantum mechanics?",
+                 'Give me a list of the top 10 dive sites you would recommend around the world.',
+                 'Write a Python code to calculate Fibonacci numbers.'
                 ],
-                inputs=[msg, chat_mode], label="AI Chat Examples",
+                inputs=msg, label="AI Chat Examples",
             )
     return demo
 
