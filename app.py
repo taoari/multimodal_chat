@@ -14,8 +14,12 @@ TABS = {
     # 'Template': app_template.get_demo,
 }
 
+css="""#chatbot {
+min-height: 600px;
+}"""
+
 def get_demo():
-    with gr.Blocks() as demo:
+    with gr.Blocks(css=css) as demo:
         for name, get_tab_func in TABS.items():
             with gr.Tab(name):
                 get_tab_func()
