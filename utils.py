@@ -81,6 +81,11 @@ def format_to_message(res):
     return msg
 
 
+def get_temp_file_name(prefix='gradio/app-', suffix='.png'):
+    import tempfile
+    fname = tempfile.NamedTemporaryFile(prefix='gradio/stability_ai-', suffix='.png').name
+    return fname
+    
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
     """

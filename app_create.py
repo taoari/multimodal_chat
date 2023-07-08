@@ -6,7 +6,7 @@ from pprint import pprint
 import mimetypes
 from dotenv import load_dotenv
 
-from utils import parse_message, format_to_message
+from utils import parse_message, format_to_message, get_temp_file_name
 
 load_dotenv()  # take environment variables from .env.
 
@@ -24,14 +24,19 @@ TITLE = "AI Create"
 DESCRIPTION = """
 # AI Create
 
-Upload an image and enter an instruction to edit or enter a description 
-to generate the first image; continually use instructions to refine the editing until satisfactory. 
+## Text-to-Image
 
-**TIPS**: 
+* Enter description in text box and hit ENTER
 
-1. always "Clear" the chat history if want to start brand new, AI Create depends on chatbot latest previous image output; 
-2. "Undo" and re-"Submit" if the generated image is not satisfactory; 
-3. adjust "prompt_strength" (in Parameters) for better authenticity (0.0) or better creativity (1.0); 
+## Image Editing
+
+* Upload an image or use an image generated from text for the initial image to work on
+* Enter editing instruction in text box and hit ENTER
+* Use image mask for **local image editing**
+* **TIPS**:
+  * **Drag and drop** an image from Chatbot to Workspace to quickly change the image to work on
+  * Use `prompt_strength` to balance authenticity and creativity
+  * Adjust `gaussian_blur_radius` to better integrate with background if mask is used
 """
 
 SETTINGS = {
@@ -43,6 +48,8 @@ PARAMETERS = {
     'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
     'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength",
             info="Low strength for authenticity; high strength for creativity"),
+    'gaussian_blur_radius': dict(cls='Slider', minimum=0, maximum=100, value=10, step=10, interactive=True, 
+            label="Gaussian blur radius", info="Gaussian blur radius for mask"),
 }
 
 ATTACHMENTS = {
@@ -59,6 +66,12 @@ ATTACHMENTS = {
 
 CONFIG = {
     'upload_button': False,
+}
+
+WORKSPACE = {
+    'image': dict(cls='Image', type="pil", label="Image work on"),
+    'mask': dict(cls='Image', source="upload", tool="sketch", interactive=True, 
+                 type='pil', label='Draw mask'),
 }
 
 def user(history, msg, *attachments):
@@ -97,7 +110,16 @@ def user_upload_file(msg, filepath):
         msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
-def bot(history, image_mask, *args):
+
+def _process_mask_image(mask_image, radius=5):
+    from PIL import ImageOps
+    from PIL import ImageFilter
+    mask_image = ImageOps.invert(mask_image.convert('RGB'))
+    mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=radius))
+    return mask_image
+
+
+def bot(history, image, mask, *args):
 
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
@@ -112,29 +134,35 @@ def bot(history, image_mask, *args):
     chat_engine = _settings['chat_engine']
 
     try:
-        # image_mask = dict(image=None, mask=None) if image_mask is None else image_mask
         # recommend to write as external functions:
         #   bot_message = <mod>.bot(user_message, **kwargs)
         bot_message = None
         if chat_engine == 'stabilityai':
-            pass
-            # import stability_ai
-            # img = stability_ai.generate(user_message, 
-            #         init_image=image_mask['image'],
-            #         mask_image=image_mask['mask'],
-            #         start_schedule=_parameters['prompt_strength'])
-            # image_mask['image'] = img
-            # from langchain.chat_models import ChatOpenAI
-            # llm = ChatOpenAI(
-            #     model_name="gpt-3.5-turbo",
-            #     temperature=0,
-            #     verbose=True,
-            # )
-            # import stability_ai
-            # refine = True
-            # bot_message = stability_ai.bot(user_message, history, 
-            #     refine=refine, prompt_strength=_parameters['prompt_strength'],
-            #     translate=_parameters['translate'], llm=llm)
+
+            if _parameters['translate']:
+                from langchain.chat_models import ChatOpenAI
+                llm = ChatOpenAI(
+                    model_name="gpt-3.5-turbo",
+                    temperature=0,
+                    verbose=True,
+                )
+                _user_message = llm.predict(f'Translate the following sentence into English: ```{user_message}```')
+            else:
+                _user_message = user_message
+
+            import stability_ai
+
+            image = stability_ai.generate(_user_message, 
+                    init_image=stability_ai._preprocess_image(image) if image is not None else None, # not arbitrary resolution
+                    mask_image=_process_mask_image(mask['mask'], radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
+                    start_schedule=_parameters['prompt_strength'])
+            fname = get_temp_file_name(prefix='gradio/stabilityai-', suffix='.png')
+            image.save(fname)
+
+            if _parameters['translate']:
+                bot_message = format_to_message(dict(images=[fname], text=f'Translated prompt: {_user_message}'))
+            else:
+                bot_message = format_to_message(dict(images=[fname]))
         
     except Exception as e:
         bot_message = 'ERROR: ' + str(e)
@@ -142,8 +170,8 @@ def bot(history, image_mask, *args):
     history[-1][1] = bot_message
 
     print(_settings); print(_parameters)
-    pprint(history); print(image_mask.keys() if image_mask is not None else None)
-    return history, image_mask # ['image'] if image_mask is not None else None
+    pprint(history)
+    return history, image
 
 def bot_undo(history, user_message):
     if len(history) >= 1:
@@ -180,13 +208,17 @@ min-height: 600px;
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
-                with gr.Accordion("Image mask", open=True) as image_mask_accordin:
-                    # image_mask = gr.Image(source='upload', tool='sketch', interactive=True)
-                    image_mask = gr.ImageMask(type='pil')
-                    image_mask_output = gr.Image(interactive=False)
+                with gr.Accordion("Workspace", open=True) as workspace_accordin:
+                    workspace = _create_from_dict(WORKSPACE)
+                    image, mask = workspace['image'], workspace['mask']
 
-                    image_mask.edit(lambda x: x['mask'] if x is not None else None, inputs=image_mask, outputs=image_mask_output)
-
+                    # update mask preview if mask or radius is changed
+                    mask_preview = gr.Image(interactive=False, label="Featured mask preview")
+                    mask.edit(lambda x, r: _process_mask_image(x['mask'], radius=r), 
+                            inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
+                    parameters['gaussian_blur_radius'].change(lambda x, r: _process_mask_image(x['mask'], radius=r), 
+                            inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
+ 
             with gr.Column(scale=9):
                 chatbot = gr.Chatbot(elem_id='chatbot')
                 with gr.Row():
@@ -208,11 +240,11 @@ min-height: 600px;
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, image_mask] + list(settings.values()) + list(parameters.values()), [chatbot, image_mask],
+            bot, [chatbot, image, mask] + list(settings.values()) + list(parameters.values()), [chatbot, image],
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, image_mask] + list(settings.values()) + list(parameters.values()), [chatbot, image_mask],
+            bot, [chatbot, image, mask] + list(settings.values()) + list(parameters.values()), [chatbot, image],
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
         undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
