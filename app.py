@@ -140,7 +140,7 @@ def user_upload_file(msg, filepath):
         msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
     return msg
 
-def bot(history, instructions, chat_mode, *args):
+def bot(history, instructions, chat_mode, image_mask, *args):
     try:
         _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
         _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
@@ -207,12 +207,12 @@ def bot(history, instructions, chat_mode, *args):
     history[-1][1] = ""
     for character in bot_message:
         history[-1][1] += character
-        yield history
+        yield history, gr.update()
     # history[-1][1] = bot_message
 
     print(chat_mode); print(_settings); print(_parameters)
     pprint(history)
-    return history
+    return history, gr.update()
 
 def bot_undo(history, user_message):
     if len(history) >= 1:
@@ -256,6 +256,9 @@ min-height: 600px;
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
+                with gr.Accordion("Image Mask", open=False) as image_mask_accordin:
+                    # draw mask on image
+                    image_mask = gr.Image(source='upload', tool='sketch', type='filepath', interactive=True)
 
                 # with gr.Accordion("Instructions", open=False) as instructions_accordin:
                 #     instructions = gr.Textbox(
@@ -288,11 +291,11 @@ min-height: 600px;
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
         msg.submit(user, [chatbot, msg, instruct] + list(attachments.values()), [chatbot, msg, instruct] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, instructions, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot
+            bot, [chatbot, instructions, chat_mode, image_mask] + list(settings.values()) + list(parameters.values()), [chatbot, image_mask],
         ).then(
             user_post, None, [msg, instruct] + list(attachments.values()), queue=False)
         submit.click(user, [chatbot, msg, instruct] + list(attachments.values()), [chatbot, msg, instruct] + list(attachments.values()), queue=False).then(
-            bot, [chatbot, instructions, chat_mode] + list(settings.values()) + list(parameters.values()), chatbot
+            bot, [chatbot, instructions, chat_mode, image_mask] + list(settings.values()) + list(parameters.values()), [chatbot, image_mask],
         ).then(
             user_post, None, [msg, instruct] + list(attachments.values()), queue=False)
         undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
