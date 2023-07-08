@@ -212,8 +212,9 @@ min-height: 600px;
                     workspace = _create_from_dict(WORKSPACE)
                     image, mask = workspace['image'], workspace['mask']
 
+                with gr.Accordion("Feathered mask preview", open=False) as preview_accordin:
                     # update mask preview if mask or radius is changed
-                    mask_preview = gr.Image(interactive=False, label="Featured mask preview")
+                    mask_preview = gr.Image(interactive=False, label="Feathered mask preview")
                     mask.edit(lambda x, r: _process_mask_image(x['mask'], radius=r), 
                             inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
                     parameters['gaussian_blur_radius'].change(lambda x, r: _process_mask_image(x['mask'], radius=r), 
