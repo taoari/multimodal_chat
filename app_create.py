@@ -89,12 +89,12 @@ CONFIG = {
 }
 
 WORKSPACE = {
-    'image': dict(cls='Image', type="pil", label="Image work on", height=512, width=512),
+    'image': dict(cls='Image', type="filepath", label="Image work on", shape=(512,512), height=512, width=512),
     'mask': dict(cls='Image', source="upload", tool="sketch", interactive=True, 
-                 type='pil', label='Draw mask', height=512, width=512),
+                 type='pil', label='Draw mask', shape=(512,512), height=512, width=512),
 }
 
-def user(history, msg, *attachments):
+def user(history, msg, image, *attachments):
     _attachments = {name: filepath for name, filepath in zip(ATTACHMENTS.keys(), attachments)}
     print(_attachments)
     msg_dict = dict(text=msg, images=[], audios=[], videos=[], files=[])
@@ -108,6 +108,8 @@ def user(history, msg, *attachments):
                 msg_dict['videos'].append(filepath)
             else:
                 msg_dict['files'].append(filepath)
+    if image is not None:
+        msg_dict['images'].append(image)
     return history + [[format_to_message(msg_dict), None]], gr.update(value="", interactive=False), \
         *([gr.update(value=None, interactive=False)] * len(attachments))
 
@@ -137,6 +139,12 @@ def _process_mask_image(mask_image, radius=5):
     mask_image = ImageOps.invert(mask_image.convert('RGB'))
     mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=radius))
     return mask_image
+
+def _assure_pil_image(img):
+    if isinstance(img, str):
+        from PIL import Image
+        img = Image.open(img)
+    return img
 
 
 def bot(history, image, mask, *args):
@@ -173,8 +181,8 @@ def bot(history, image, mask, *args):
             import stability_ai
 
             image = stability_ai.generate(_user_message, 
-                    init_image=image, # not arbitrary resolution
-                    mask_image=_process_mask_image(mask['mask'], radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
+                    init_image=_assure_pil_image(image), # not arbitrary resolution
+                    mask_image=_process_mask_image(_assure_pil_image(mask['mask']), radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
                     start_schedule=_parameters['prompt_strength'])
             fname = get_temp_file_name(prefix='gradio/stabilityai-', suffix='.png')
             image.save(fname)
@@ -193,11 +201,14 @@ def bot(history, image, mask, *args):
     pprint(history)
     return history, image
 
-def bot_undo(history, user_message):
+def bot_undo(history, user_message, image):
     if len(history) >= 1:
         user_message = history[-1][0]
-        return history[:-1], user_message
-    return history, user_message
+        msg_dict = parse_message(user_message)
+        if len(msg_dict['images']) > 0:
+            return history[:-1], msg_dict['text'], msg_dict['images'][-1]
+        return history[:-1], msg_dict['text'], None
+    return history, user_message, image
 
 def clear_chat():
     # conversation_chain.memory.clear()
@@ -261,15 +272,15 @@ min-height: 600px;
 
         if CONFIG['upload_button']:
             upload.upload(user_upload_file, [msg, upload], [msg], queue=False)
-        msg.submit(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
+        msg.submit(user, [chatbot, msg, image] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
             bot, [chatbot, image, mask] + list(settings.values()) + list(parameters.values()), [chatbot, image],
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
-        submit.click(user, [chatbot, msg] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
+        submit.click(user, [chatbot, msg, image] + list(attachments.values()), [chatbot, msg] + list(attachments.values()), queue=False).then(
             bot, [chatbot, image, mask] + list(settings.values()) + list(parameters.values()), [chatbot, image],
         ).then(
             user_post, None, [msg] + list(attachments.values()), queue=False)
-        undo.click(bot_undo, [chatbot, msg], [chatbot, msg])
+        undo.click(bot_undo, [chatbot, msg, image], [chatbot, msg, image])
         clear.click(clear_chat, [], [chatbot, msg] + list(attachments.values()))
 
         with gr.Accordion("Examples", open=False) as examples_accordin:
