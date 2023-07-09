@@ -89,9 +89,9 @@ CONFIG = {
 }
 
 WORKSPACE = {
-    'image': dict(cls='Image', type="pil", label="Image work on"),
+    'image': dict(cls='Image', type="pil", label="Image work on", height=512, width=512),
     'mask': dict(cls='Image', source="upload", tool="sketch", interactive=True, 
-                 type='pil', label='Draw mask'),
+                 type='pil', label='Draw mask', height=512, width=512),
 }
 
 def user(history, msg, *attachments):
@@ -173,8 +173,8 @@ def bot(history, image, mask, *args):
             import stability_ai
 
             image = stability_ai.generate(_user_message, 
-                    init_image=stability_ai._preprocess_image(image) if image is not None else None, # not arbitrary resolution
-                    mask_image=_process_mask_image(stability_ai._preprocess_image(mask['mask']), radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
+                    init_image=image, # not arbitrary resolution
+                    mask_image=_process_mask_image(mask['mask'], radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
                     start_schedule=_parameters['prompt_strength'])
             fname = get_temp_file_name(prefix='gradio/stabilityai-', suffix='.png')
             image.save(fname)
@@ -215,14 +215,15 @@ def get_demo():
     # use css and elem_id to format
     css="""#chatbot {
 min-height: 600px;
-}"""
+}
+"""
 
     with gr.Blocks(css=css) as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
-            with gr.Column(scale=1):
+            with gr.Column(scale=4):
                 attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
@@ -234,13 +235,13 @@ min-height: 600px;
 
                 with gr.Accordion("Feathered mask preview", open=False) as preview_accordin:
                     # update mask preview if mask or radius is changed
-                    mask_preview = gr.Image(interactive=False, label="Feathered mask preview")
+                    mask_preview = gr.Image(interactive=False, label="Feathered mask preview", height=512, width=512)
                     mask.edit(lambda x, r: _process_mask_image(x['mask'], radius=r), 
                             inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
                     parameters['gaussian_blur_radius'].change(lambda x, r: _process_mask_image(x['mask'], radius=r), 
                             inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
  
-            with gr.Column(scale=9):
+            with gr.Column(scale=6):
                 chatbot = gr.Chatbot(elem_id='chatbot')
                 with gr.Row():
                     if CONFIG['upload_button']:

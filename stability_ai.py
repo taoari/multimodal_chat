@@ -30,6 +30,9 @@ def clamp(num, min_value, max_value):
 def _preprocess_image(img):
     """init_image: image dimensions must be multiples of 64"""
     # NOTE: 512, 640, 768, 896 = 128 * [4,5,6,7]
+    if img is None:
+        return img
+    
     width, height = img.size
     if width <= height:
         w = 512
@@ -37,7 +40,10 @@ def _preprocess_image(img):
     else:
         h = 512
         w = int((width/height) * h)
-    img = img.resize((w,h))
+
+    if w != width or h != height:
+        img = img.resize((w,h))
+
     width, height = img.size
     new_width, new_height = clamp(int(width/128), 4, 7) * 128, clamp(int(height/128), 4, 7) * 128
     if new_width != width or new_height != height:
@@ -109,6 +115,9 @@ def generate(prompt, init_image=None, mask_image=None, start_schedule=0.6, width
         # Available engines: stable-diffusion-v1 stable-diffusion-v1-5 stable-diffusion-512-v2-0 stable-diffusion-768-v2-0
         # stable-diffusion-512-v2-1 stable-diffusion-768-v2-1 stable-diffusion-xl-beta-v2-2-2 stable-inpainting-v1-0 stable-inpainting-512-v2-0
     )
+
+    init_image = _preprocess_image(init_image)
+    mask_image = _preprocess_image(mask_image)
 
     kwargs = dict(init_image=init_image, mask_image=mask_image, start_schedule=start_schedule)
 
