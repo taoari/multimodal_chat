@@ -90,6 +90,8 @@ CONFIG = {
 
 IMAGE_KWARGS = dict(height=512)
 
+MASK_INVERT_CHAT_ENGINES = ['stabilityai']
+
 WORKSPACE = {
     'image': dict(cls='Image', type="filepath", label="Image work on", **IMAGE_KWARGS),
     'mask': dict(cls='Image', source="upload", tool="sketch", interactive=True, 
@@ -135,10 +137,14 @@ def user_upload_file(msg, filepath):
     return msg
 
 
-def _process_mask_image(mask_image, radius=5):
+def _process_mask_image(mask_image, invert=True, radius=5):
+    if mask_image is None:
+        return None
     from PIL import ImageOps
     from PIL import ImageFilter
-    mask_image = ImageOps.invert(mask_image.convert('RGB'))
+    mask_image = _assure_pil_image(mask_image)
+    if invert:
+        mask_image = ImageOps.invert(mask_image.convert('RGB'))
     mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=radius))
     return mask_image
 
@@ -160,13 +166,15 @@ def bot(history, image, mask, *args):
     _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
     _settings['chat_engine'] = 'stabilityai' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
     
-    user_message = history[-1][0]
+    user_message = parse_message(history[-1][0])['text']
     chat_engine = _settings['chat_engine']
 
     try:
         # recommend to write as external functions:
         #   bot_message = <mod>.bot(user_message, **kwargs)
         bot_message = None
+        mask_image = mask['mask'] if isinstance(mask, dict) else mask
+
         if chat_engine == 'stabilityai':
 
             if _parameters['translate']:
@@ -184,7 +192,8 @@ def bot(history, image, mask, *args):
 
             image = stability_ai.generate(_user_message, 
                     init_image=_assure_pil_image(image), # not arbitrary resolution
-                    mask_image=_process_mask_image(_assure_pil_image(mask['mask']), radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
+                    mask_image=_process_mask_image(_assure_pil_image(mask_image), radius=_parameters['gaussian_blur_radius'], 
+                            invert=True),
                     start_schedule=_parameters['prompt_strength'])
             fname = get_temp_file_name(prefix='gradio/stabilityai-', suffix='.png')
             image.save(fname)
@@ -193,9 +202,32 @@ def bot(history, image, mask, *args):
                 bot_message = format_to_message(dict(images=[fname], text=f'Translated prompt: {_user_message}'))
             else:
                 bot_message = format_to_message(dict(images=[fname]))
+
+        elif chat_engine == 'dalle2':
+
+            from PIL import Image
+            import requests
+            from io import BytesIO
+
+            import dalle2
+            # import pdb; pdb.set_trace()
+            image_url = dalle2.generate(user_message,
+                    image=_assure_pil_image(image),
+                    mask=_process_mask_image(_assure_pil_image(mask_image), radius=_parameters['gaussian_blur_radius'], 
+                            invert=False),
+            )
+            
+            # NOTE: image_url can not be shown in Image component
+            fname = get_temp_file_name(prefix='gradio/dalle2-', suffix='.png')
+            image = Image.open(BytesIO(requests.get(image_url).content)) # for return
+            image.save(fname)
+
+            bot_message = format_to_message(dict(images=[fname]))
         
     except Exception as e:
-        bot_message = 'ERROR: ' + str(e)
+        import traceback
+        bot_message = traceback.format_exc()
+        # bot_message = 'ERROR: ' + str(e)
 
     history[-1][1] = bot_message
 
@@ -236,7 +268,7 @@ min-height: 600px;
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
-            with gr.Column(scale=4):
+            with gr.Column(scale=4, min_width=600):
                 attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
@@ -248,10 +280,11 @@ min-height: 600px;
 
                 with gr.Accordion("Feathered mask preview", open=False) as preview_accordin:
                     # update mask preview if mask or radius is changed
+                    
                     mask_preview = gr.Image(interactive=False, label="Feathered mask preview", **IMAGE_KWARGS)
-                    mask.edit(lambda x, r: _process_mask_image(x['mask'], radius=r), 
+                    mask.edit(lambda x, r: _process_mask_image(x['mask'], radius=r, invert=True), 
                             inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
-                    parameters['gaussian_blur_radius'].change(lambda x, r: _process_mask_image(x['mask'], radius=r), 
+                    parameters['gaussian_blur_radius'].change(lambda x, r: _process_mask_image(x['mask'], radius=r, invert=True), 
                             inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
  
             with gr.Column(scale=6):
