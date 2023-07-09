@@ -48,7 +48,7 @@ PARAMETERS = {
     'translate': dict(cls='Checkbox', interactive=True, label="Translate", info="Translate into English may generate better results"),
     'prompt_strength': dict(cls='Slider', minimum=0, maximum=1, value=0.6, step=0.05, interactive=True, label="Prompt strength",
             info="Low strength for authenticity; high strength for creativity"),
-    'gaussian_blur_radius': dict(cls='Slider', minimum=0, maximum=100, value=10, step=10, interactive=True, 
+    'gaussian_blur_radius': dict(cls='Slider', minimum=0, maximum=100, value=10, step=1, interactive=True, 
             label="Gaussian blur radius", info="Gaussian blur radius for mask"),
 }
 
@@ -154,7 +154,7 @@ def bot(history, image, mask, *args):
 
             image = stability_ai.generate(_user_message, 
                     init_image=stability_ai._preprocess_image(image) if image is not None else None, # not arbitrary resolution
-                    mask_image=_process_mask_image(mask['mask'], radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
+                    mask_image=_process_mask_image(stability_ai._preprocess_image(mask['mask']), radius=_parameters['gaussian_blur_radius']) if isinstance(mask, dict) else mask,
                     start_schedule=_parameters['prompt_strength'])
             fname = get_temp_file_name(prefix='gradio/stabilityai-', suffix='.png')
             image.save(fname)
