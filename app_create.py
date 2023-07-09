@@ -24,7 +24,7 @@ TITLE = "AI Create"
 DESCRIPTION = """
 # AI Create
 
-## Text-to-Image
+## Generate Image from Text
 
 * Enter description in text box and hit ENTER
 
@@ -32,11 +32,31 @@ DESCRIPTION = """
 
 * Upload an image or use an image generated from text for the initial image to work on
 * Enter editing instruction in text box and hit ENTER
-* Use image mask for **local image editing**
-* **TIPS**:
-  * **Drag and drop** an image from Chatbot to Workspace (both "Image work on" and "Draw mask") to quickly change the image to work on
-  * Use `prompt_strength` to balance authenticity and creativity
-  * Adjust `gaussian_blur_radius` to better integrate with background if mask is used
+
+
+## Inpainting
+
+* Upload an image or drag and drop generated image to both "Image work on" and "Draw mask"
+* Draw mask region for inpainting
+* Leave text box empty and hit ENTER
+
+## Local Image Editing
+
+* Upload an image or drag and drop generated image to both "Image work on" and "Draw mask"
+* Draw mask region for local editing
+* Enter editing instruction in text box and hit ENTER
+
+
+## TIPS:
+
+* **Drag and drop** an image from Chatbot to Workspace to quickly change the image to work on
+  * make sure "Image work on" and "Draw mask" background are synced if you want to do inpainting or local image editing
+* Use `prompt_strength` to balance authenticity and creativity
+* Adjust `gaussian_blur_radius` to better integrate with background if mask is used
+
+## NOTE:
+
+* "Image work on" and "Draw mask" should be merged, but due to a bug in gradio, currently you have to make sure that they are synced for inpainting and local image editing.
 """
 
 SETTINGS = {
