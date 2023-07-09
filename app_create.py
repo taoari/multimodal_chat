@@ -145,7 +145,8 @@ def _process_mask_image(mask_image, invert=True, radius=5):
     mask_image = _assure_pil_image(mask_image)
     if invert:
         mask_image = ImageOps.invert(mask_image.convert('RGB'))
-    mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=radius))
+    if radius > 0:
+        mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=radius))
     return mask_image
 
 def _assure_pil_image(img):
@@ -212,8 +213,8 @@ def bot(history, image, mask, *args):
             import dalle2
             image_url = dalle2.generate(user_message,
                     image=_assure_pil_image(image),
-                    mask=_process_mask_image(_assure_pil_image(mask_image), radius=_parameters['gaussian_blur_radius'], 
-                            invert=True),
+                    mask=_process_mask_image(_assure_pil_image(mask_image), radius=0, 
+                            invert=True), # NOTE: dalle2 should not blur on mask image, prompt_strength not work
                     prompt_strength=_parameters['prompt_strength'])
             
             # NOTE: image_url can not be shown in Image component
