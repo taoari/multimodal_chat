@@ -210,12 +210,11 @@ def bot(history, image, mask, *args):
             from io import BytesIO
 
             import dalle2
-            # import pdb; pdb.set_trace()
             image_url = dalle2.generate(user_message,
                     image=_assure_pil_image(image),
                     mask=_process_mask_image(_assure_pil_image(mask_image), radius=_parameters['gaussian_blur_radius'], 
-                            invert=False),
-            )
+                            invert=True),
+                    prompt_strength=_parameters['prompt_strength'])
             
             # NOTE: image_url can not be shown in Image component
             fname = get_temp_file_name(prefix='gradio/dalle2-', suffix='.png')
