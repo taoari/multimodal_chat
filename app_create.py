@@ -88,10 +88,12 @@ CONFIG = {
     'upload_button': False,
 }
 
+IMAGE_KWARGS = dict(height=512)
+
 WORKSPACE = {
-    'image': dict(cls='Image', type="filepath", label="Image work on", shape=(512,512), height=512, width=512),
+    'image': dict(cls='Image', type="filepath", label="Image work on", **IMAGE_KWARGS),
     'mask': dict(cls='Image', source="upload", tool="sketch", interactive=True, 
-                 type='pil', label='Draw mask', shape=(512,512), height=512, width=512),
+                 type='pil', label='Draw mask', **IMAGE_KWARGS),
 }
 
 def user(history, msg, image, *attachments):
@@ -246,7 +248,7 @@ min-height: 600px;
 
                 with gr.Accordion("Feathered mask preview", open=False) as preview_accordin:
                     # update mask preview if mask or radius is changed
-                    mask_preview = gr.Image(interactive=False, label="Feathered mask preview", height=512, width=512)
+                    mask_preview = gr.Image(interactive=False, label="Feathered mask preview", **IMAGE_KWARGS)
                     mask.edit(lambda x, r: _process_mask_image(x['mask'], radius=r), 
                             inputs=[mask, parameters['gaussian_blur_radius']], outputs=mask_preview)
                     parameters['gaussian_blur_radius'].change(lambda x, r: _process_mask_image(x['mask'], radius=r), 
