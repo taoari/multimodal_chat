@@ -14,6 +14,7 @@ from gradio_client.documentation import document, set_documentation_group
 from gradio.blocks import Blocks
 from gradio.components import (
     Button,
+    UploadButton,
     Chatbot,
     Markdown,
     State,
@@ -59,10 +60,12 @@ class ChatInterface(Blocks):
         theme: Theme | str | None = None,
         css: str | None = None,
         analytics_enabled: bool | None = None,
+        upload_btn: str | None | Button = "📁",
         submit_btn: str | None | Button = "Submit",
-        retry_btn: str | None | Button = "🔄  Retry",
-        undo_btn: str | None | Button = "↩️ Undo",
-        clear_btn: str | None | Button = "🗑️  Clear",
+        retry_btn: str | None | Button = None, # "🔄  Retry",
+        undo_btn: str | None | Button = "Undo", # "↩️ Undo",
+        clear_btn: str | None | Button = "Clear", # "🗑️  Clear",
+        additional_inputs: list | None = None,
     ):
         """
         Parameters:
@@ -101,6 +104,7 @@ class ChatInterface(Blocks):
         else:
             self.cache_examples = cache_examples or False
         self.buttons: list[Button] = []
+        self.addtional_inputs = [] if additional_inputs is None else additional_inputs # make sure a list
 
         with self:
             if title:
@@ -110,35 +114,48 @@ class ChatInterface(Blocks):
             if description:
                 Markdown(description)
 
-            with Group():
-                if chatbot:
-                    self.chatbot = chatbot.render()
-                else:
-                    self.chatbot = Chatbot(label="Chatbot")
-                with Row():
-                    if textbox:
-                        self.textbox = textbox.render()
-                    else:
-                        self.textbox = Textbox(
-                            container=False,
-                            show_label=False,
-                            placeholder="Type a message...",
-                            scale=10,
-                        )
-                    if submit_btn:
-                        if isinstance(submit_btn, Button):
-                            submit_btn.render()
-                        elif isinstance(submit_btn, str):
-                            submit_btn = Button(
-                                submit_btn, variant="primary", scale=1, min_width=0
-                            )
-                        else:
-                            raise ValueError(
-                                f"The submit_btn parameter must be a gr.Button, string, or None, not {type(submit_btn)}"
-                            )
-                    self.buttons.append(submit_btn)
-
+            # with Group():
+            if chatbot:
+                self.chatbot = chatbot.render()
+            else:
+                self.chatbot = Chatbot(elem_id="chatbot")
             with Row():
+                if upload_btn:
+                    if isinstance(upload_btn, UploadButton):
+                        upload_btn.render()
+                    elif isinstance(upload_btn, str):
+                        upload_btn = UploadButton(
+                            upload_btn, scale=0.1, min_width=0
+                        )
+                    else:
+                        raise ValueError(
+                            f"The upload_btn parameter must be a gr.UploadButton, string, or None, not {type(upload_btn)}"
+                        )
+                self.buttons.append(upload_btn)
+                if textbox:
+                    self.textbox = textbox.render()
+                else:
+                    self.textbox = Textbox(
+                        container=False,
+                        show_label=False,
+                        placeholder="Type a message...",
+                        scale=10,
+                        elem_id='inputTextBox',
+                    )
+                if submit_btn:
+                    if isinstance(submit_btn, Button):
+                        submit_btn.render()
+                    elif isinstance(submit_btn, str):
+                        submit_btn = Button(
+                            submit_btn, variant="primary", scale=1, min_width=0
+                        )
+                    else:
+                        raise ValueError(
+                            f"The submit_btn parameter must be a gr.Button, string, or None, not {type(submit_btn)}"
+                        )
+                self.buttons.append(submit_btn)
+
+            # with Row():
                 self.stop_btn = Button("Stop", variant="stop", visible=False)
 
                 for btn in [retry_btn, undo_btn, clear_btn]:
@@ -146,7 +163,7 @@ class ChatInterface(Blocks):
                         if isinstance(btn, Button):
                             btn.render()
                         elif isinstance(btn, str):
-                            btn = Button(btn, variant="secondary")
+                            btn = Button(btn, variant="secondary", scale=1, min_width=0)
                         else:
                             raise ValueError(
                                 f"All the _btn parameters must be a gr.Button, string, or None, not {type(btn)}"
@@ -156,6 +173,7 @@ class ChatInterface(Blocks):
                 self.fake_api_btn = Button("Fake API", visible=False)
                 self.fake_response_textbox = Textbox(label="Response", visible=False)
                 (
+                    self.upload_btn,
                     self.submit_btn,
                     self.retry_btn,
                     self.undo_btn,
@@ -196,10 +214,16 @@ class ChatInterface(Blocks):
             queue=False,
         ).then(
             submit_fn,
-            [self.saved_input, self.chatbot],
+            [self.saved_input, self.chatbot] + self.addtional_inputs,
             [self.chatbot],
             api_name=False,
         )
+
+        if self.upload_btn:
+            self.upload_btn.upload(
+                self._upload_fn, 
+                [self.textbox, self.upload_btn], 
+                [self.textbox], queue=False)
 
         if self.submit_btn:
             self.submit_btn.click(
@@ -216,7 +240,7 @@ class ChatInterface(Blocks):
                 queue=False,
             ).then(
                 submit_fn,
-                [self.saved_input, self.chatbot],
+                [self.saved_input, self.chatbot] + self.addtional_inputs,
                 [self.chatbot],
                 api_name=False,
             )
@@ -236,7 +260,7 @@ class ChatInterface(Blocks):
                 queue=False,
             ).then(
                 submit_fn,
-                [self.saved_input, self.chatbot],
+                [self.saved_input, self.chatbot] + self.addtional_inputs,
                 [self.chatbot],
                 api_name=False,
             )
@@ -292,31 +316,31 @@ class ChatInterface(Blocks):
         return history
 
     def _submit_fn(
-        self, message: str, history_with_input: list[list[str | None]]
+        self, message: str, history_with_input: list[list[str | None]], *additional_inputs,
     ) -> list[list[str | None]]:
         history = history_with_input[:-1]
-        response = self.fn(message, history)
+        response = self.fn(message, history, *additional_inputs)
         history.append([message, response])
         return history
 
     def _stream_fn(
-        self, message: str, history_with_input: list[list[str | None]]
+        self, message: str, history_with_input: list[list[str | None]], *additional_inputs,
     ) -> Generator[list[list[str | None]], None, None]:
         history = history_with_input[:-1]
-        for response in self.fn(message, history):
+        for response in self.fn(message, history, *additional_inputs):
             yield history + [[message, response]]
 
     def _api_submit_fn(
-        self, message: str, history: list[list[str | None]]
+        self, message: str, history: list[list[str | None]], *additional_inputs,
     ) -> tuple[str, list[list[str | None]]]:
-        response = self.fn(message, history)
+        response = self.fn(message, history, *additional_inputs)
         history.append([message, response])
         return response, history
 
     def _api_stream_fn(
-        self, message: str, history: list[list[str | None]]
+        self, message: str, history: list[list[str | None]], *additional_inputs,
     ) -> Generator[tuple[str, list[list[str | None]]], None, None]:
-        for response in self.fn(message, history):
+        for response in self.fn(message, history, *additional_inputs):
             yield response, history + [[message, response]]
 
     def _examples_fn(self, message: str) -> list[list[str | None]]:
@@ -331,6 +355,19 @@ class ChatInterface(Blocks):
             message = ""
         return history, message or ""
     
+    def _upload_fn(self, msg, filepath):
+        import os, mimetypes
+        mtype = mimetypes.guess_type(filepath.name)[0]
+        if mtype.startswith('image'):
+            msg += f'<img src="\\file={filepath.name}" alt="{os.path.basename(filepath.name)}"/>'
+        elif mtype.startswith('audio'):
+            msg += f'<audio controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</audio>'
+        elif mtype.startswith('video'):
+            msg += f'<video controls><source src="\\file={filepath.name}">{os.path.basename(filepath.name)}</video>'
+        else:
+            msg += f'<a href="\\file={filepath.name}">📁 {os.path.basename(filepath.name)}</a>'
+        return msg
+    
 
 if __name__ == '__main__':
 
@@ -338,8 +375,10 @@ if __name__ == '__main__':
     import time
 
     def echo_stream(message, history):
+        yield ""
+        
         for i in range(len(message)):
-            time.sleep(0.3)
+            # time.sleep(0.3)
             yield message[:i+1]
 
     ChatInterface(echo_stream).queue().launch()
