@@ -65,18 +65,70 @@ def _random_bot_fn(message, history, _settings, _parameters):
     ])
     return bot_message
 
-def _format_messages(history, message=None, system=None, format='openai'):
+
+DEFAULT_INSTRUCTIONS_FALCON = """The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Falcon, and a human user, called User. In the following interactions, User and Falcon will converse in natural language, and Falcon will answer User's questions. Falcon was built to be respectful, polite and inclusive. Falcon was built by the Technology Innovation Institute in Abu Dhabi. Falcon will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. The conversation begins."""
+
+def _format_messages(history, message=None, system=None, format='plain', 
+        user_name='user', bot_name='assistant'):
     _history = []
-    if system:
-        _history.append({'role': 'system', 'content': system})
-    for human, ai in history:
-        if human:
-            _history.append({'role': 'user', 'content': human})
-        if ai:
-            _history.append({'role': 'assistant', 'content': ai})
-    if message:
-        _history.append({'role': 'user', 'content': message})
-    return _history
+    if format == 'openai_chat':
+        if system:
+            _history.append({'role': 'system', 'content': system})
+        for human, ai in history:
+            if human:
+                _history.append({'role': 'user', 'content': human})
+            if ai:
+                _history.append({'role': 'assistant', 'content': ai})
+        if message:
+            _history.append({'role': 'user', 'content': message})
+        return _history
+    
+    elif format == 'chatml':
+        if system:
+            _history.append('<|im_start|>system\n{system}<|im_end|>')
+        for human, ai in history:
+            if human:
+                _history.append(f'<|im_start|>{user_name}\n{human}<|im_end|>')
+            if ai:
+                _history.append(f'<|im_start|>{bot_name}\n{ai}')
+        if message:
+            _history.append(f'<|im_start|>{user_name}\n{message}<|im_end|>')
+            _history.append(f'<|im_start|>{bot_name}\n')
+        return '\n'.join(_history)
+    
+    elif format == 'plain':
+        if system:
+            _history.append(system)
+        for human, ai in history:
+            if human:
+                _history.append(f'{user_name}: {human}')
+            if ai:
+                _history.append(f'{bot_name}: {ai}')
+        if message:
+            _history.append(f'{user_name}: {message}')
+            _history.append(f'{bot_name}: ')
+        return '\n'.join(_history)
+    
+    else:
+        raise ValueError(f"Invalid messages to format: {format}")
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def _print_messages(history, message, bot_message, system=None,
+    user_name='user', bot_name='assistant'):
+    """history is list of tuple [(user_msg, bot_msg), ...]"""
+    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name)
+    print(f'{bcolors.OKCYAN}{prompt}{bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
+
 
 def _openai_bot_fn(message, history, _settings, _parameters):
     import openai, os
@@ -84,7 +136,7 @@ def _openai_bot_fn(message, history, _settings, _parameters):
 
     resp = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
-        messages=_format_messages(history, message),
+        messages=_format_messages(history, message, format='openai_chat'),
     )
     return resp.choices[0].message.content
 
@@ -97,7 +149,7 @@ def _openai_stream_bot_fn(message, history, _settings, _parameters):
 
     resp = openai.ChatCompletion.create(
         model=_settings['chat_engine'],
-        messages=_format_messages(history, message),
+        messages=_format_messages(history, message, format='openai_chat'),
         stream=True,
         **kwargs,
     )
@@ -107,6 +159,8 @@ def _openai_stream_bot_fn(message, history, _settings, _parameters):
         if 'content' in _resp.choices[0].delta: # last resp delta is empty
             bot_message += _resp.choices[0].delta.content # need to accumulate previous message
         yield bot_message.strip() # accumulated message can easily be postprocessed
+
+    _print_messages(history, message, bot_message)
 
 def _hf_stream_bot_fn(message, history, _settings, _parameters):
     # NOTE: temperature > 0 for HF models, max_new_tokens instead of max_tokens
@@ -119,11 +173,20 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
 
     client = Client(API_URL, headers=headers)
 
+    system, user_name, bot_name = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon'
+
+    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name)
+
+    # bot_message = client.generate(prompt, **kwargs).generated_text.strip().split(f'\n{user_name}')[0]
     bot_message = ""
-    for response in client.generate_stream(message, **kwargs):
+    for response in client.generate_stream(prompt, **kwargs):
         if not response.token.special:
             bot_message += response.token.text
-            yield bot_message.strip()
+            yield bot_message.strip().split(f'\n{user_name}')[0] # stop word
+
+    bot_message = bot_message.strip().split(f'\n{user_name}')[0]
+    _print_messages(history, message, bot_message, system=system, user_name=user_name, bot_name=bot_name)
+    return bot_message
 
 def bot_fn(message, history, *args):
     yield "" # Not crash if empty user input
@@ -149,7 +212,7 @@ def bot_fn(message, history, *args):
         bot_message = m # for printing
 
     print(_settings); print(_parameters)
-    pprint(history + [[message, bot_message]])
+    # pprint(history + [[message, bot_message]]
 
 
 def get_demo():
