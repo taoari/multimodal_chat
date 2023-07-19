@@ -6,9 +6,11 @@ load_dotenv()  # take environment variables from .env.
 
 import app_template
 import app_chat
+import app_chat_v2
 import app_create
 
 TABS = {
+    'AI Chat (v2)': app_chat_v2.get_demo,
     'AI Chat': app_chat.get_demo,
     'AI Create': app_create.get_demo,
     # 'Template': app_template.get_demo,
@@ -51,4 +53,4 @@ if __name__ == '__main__':
     demo = get_demo()
     from utils import reload_javascript
     reload_javascript()
-    demo.queue().launch(share=True, server_port=args.port)
+    demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
