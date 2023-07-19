@@ -13,8 +13,28 @@ load_dotenv()  # take environment variables from .env.
 TEXT2DISPLAY = { 
         'auto': 'Auto', 'random': 'Random', 'openai': 'OpenAI', # for chat engine
         'gpt-3.5-turbo': 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k': 'gpt-3.5-turbo-16k',
-        'gpt2': 'GPT-2', 'falcon-7b-instruct': 'Falcon (7b Instruct)',
+        'gpt2': 'GPT-2', 
+        # 'falcon-7b-instruct': 'Falcon (7b Instruct)',
     }
+
+HF_ENDPOINTS = {}
+
+def parse_endpoints_from_environ():
+    global HF_ENDPOINTS
+    for name, value in os.environ.items():
+        if name.startswith('HF_INFERENCE_ENDPOINT_'):
+            HF_ENDPOINTS[name[len('HF_INFERENCE_ENDPOINT_'):].lower()] = value
+
+def register_endpoints_to_text2display(TEXT2DISPLAY):
+    for _name, _value in HF_ENDPOINTS.items():
+        if 'huggingface.co' in _value:
+            TEXT2DISPLAY[_name] = f'HF ({_name})'
+        else:
+            TEXT2DISPLAY[_name] = f'Self-Host ({_name})'
+
+
+parse_endpoints_from_environ()
+register_endpoints_to_text2display(TEXT2DISPLAY)
 
 DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
 
@@ -30,7 +50,8 @@ Simply enter text and press ENTER in the textbox to interact with the chatbot.
 
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, 
-            ['auto', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt2', 'falcon-7b-instruct'])),
+            ['auto', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt2'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
+            )),
             value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine"),
 }
@@ -68,6 +89,7 @@ def _random_bot_fn(message, history, _settings, _parameters):
 
 DEFAULT_INSTRUCTIONS = """The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."""
 DEFAULT_INSTRUCTIONS_FALCON = """The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Falcon, and a human user, called User. In the following interactions, User and Falcon will converse in natural language, and Falcon will answer User's questions. Falcon was built to be respectful, polite and inclusive. Falcon was built by the Technology Innovation Institute in Abu Dhabi. Falcon will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. The conversation begins."""
+DEFAULT_INSTRUCTIONS_MPT = """A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers."""
 
 def _format_messages(history, message=None, system=None, format='plain', 
         user_name='user', bot_name='assistant'):
@@ -185,15 +207,24 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
     # NOTE: temperature > 0 for HF models, max_new_tokens instead of max_tokens
     kwargs = dict(temperature=max(0.001, _parameters['temperature']), max_new_tokens=_parameters['max_tokens'])
 
+    chat_engine = _settings['chat_engine']
     from text_generation import Client
-    API_URL = 'https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct'
+    # API_URL = 'https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct'
+    API_URL = HF_ENDPOINTS[chat_engine]
     API_TOKEN = os.environ['HUGGINGFACEHUB_API_TOKEN']
     headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     client = Client(API_URL, headers=headers)
 
-    system, user_name, bot_name = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon'
-    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name)
+    if chat_engine.startswith('falcon'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
+    elif chat_engine.startswith('mpt'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
+    else:
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS, 'Human', 'AI', 'plain'
+
+    prompt = _format_messages(history, message, system=system, 
+            user_name=user_name, bot_name=bot_name, format=_format)
 
     # bot_message = client.generate(prompt, **kwargs).generated_text.strip().split(f'\n{user_name}')[0]
     bot_message = ""
@@ -203,7 +234,8 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
             yield bot_message.strip().split(f'\n{user_name}')[0] # stop word
 
     bot_message = bot_message.strip().split(f'\n{user_name}')[0]
-    _print_messages(history, message, bot_message, system=system, user_name=user_name, bot_name=bot_name)
+    _print_messages(history, message, bot_message, system=system, 
+            user_name=user_name, bot_name=bot_name)
     return bot_message
 
 def bot_fn(message, history, *args):
@@ -215,12 +247,15 @@ def bot_fn(message, history, *args):
     _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
     _settings['chat_engine'] = 'gpt-3.5-turbo' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
 
-    bot_message = {'random': _random_bot_fn,
-        'gpt-3.5-turbo': _openai_stream_bot_fn,
-        'gpt-3.5-turbo-16k': _openai_stream_bot_fn,
-        'gpt2': _hf_gpt2_bot_fn,
-        'falcon-7b-instruct': _hf_stream_bot_fn,
-        }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
+    if _settings['chat_engine'] in HF_ENDPOINTS:
+        bot_message = _hf_stream_bot_fn(message, history, _settings, _parameters)
+    else:
+        bot_message = {'random': _random_bot_fn,
+            'gpt-3.5-turbo': _openai_stream_bot_fn,
+            'gpt-3.5-turbo-16k': _openai_stream_bot_fn,
+            'gpt2': _hf_gpt2_bot_fn,
+            # 'falcon-7b-instruct': _hf_stream_bot_fn,
+            }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
     
     if isinstance(bot_message, str):
         for i in range(len(bot_message)):
