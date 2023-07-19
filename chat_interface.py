@@ -147,7 +147,7 @@ class ChatInterface(Blocks):
                         submit_btn.render()
                     elif isinstance(submit_btn, str):
                         submit_btn = Button(
-                            submit_btn, variant="primary", scale=1, min_width=0
+                            submit_btn, variant="primary", scale=1, min_width=60
                         )
                     else:
                         raise ValueError(
@@ -163,7 +163,7 @@ class ChatInterface(Blocks):
                         if isinstance(btn, Button):
                             btn.render()
                         elif isinstance(btn, str):
-                            btn = Button(btn, variant="secondary", scale=1, min_width=0)
+                            btn = Button(btn, variant="secondary", scale=1, min_width=60)
                         else:
                             raise ValueError(
                                 f"All the _btn parameters must be a gr.Button, string, or None, not {type(btn)}"
