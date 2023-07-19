@@ -89,7 +89,8 @@ def _openai_bot_fn(message, history, _settings, _parameters):
     return resp.choices[0].message.content
 
 def _openai_stream_bot_fn(message, history, _settings, _parameters):
-    kwargs = dict(temperature=_parameters['temperature'], max_tokens=_parameters['max_tokens'])
+    # NOTE: do not limit max_tokens, as ChatGPT is capable of writing long essay.
+    kwargs = dict(temperature=_parameters['temperature']) # , max_tokens=_parameters['max_tokens'])
 
     import openai
     openai.api_key = os.environ["OPENAI_API_KEY"]
@@ -145,6 +146,7 @@ def bot_fn(message, history, *args):
     else:
         for m in bot_message:
             yield m
+        bot_message = m # for printing
 
     print(_settings); print(_parameters)
     pprint(history + [[message, bot_message]])

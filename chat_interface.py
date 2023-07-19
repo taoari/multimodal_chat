@@ -141,6 +141,7 @@ class ChatInterface(Blocks):
                         placeholder="Type a message...",
                         scale=10,
                         elem_id='inputTextBox',
+                        min_width=300, # for better mobile
                     )
                 if submit_btn:
                     if isinstance(submit_btn, Button):
