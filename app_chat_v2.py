@@ -13,7 +13,7 @@ load_dotenv()  # take environment variables from .env.
 TEXT2DISPLAY = { 
         'auto': 'Auto', 'random': 'Random', 'openai': 'OpenAI', # for chat engine
         'gpt-3.5-turbo': 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k': 'gpt-3.5-turbo-16k',
-        'falcon-7b-instruct': 'Falcon (7b Instruct)',
+        'gpt2': 'GPT-2', 'falcon-7b-instruct': 'Falcon (7b Instruct)',
     }
 
 DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
@@ -30,7 +30,7 @@ Simply enter text and press ENTER in the textbox to interact with the chatbot.
 
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, 
-            ['auto', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'falcon-7b-instruct'])),
+            ['auto', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt2', 'falcon-7b-instruct'])),
             value=TEXT2DISPLAY['auto'], 
             interactive=True, label="Chat engine"),
 }
@@ -66,6 +66,7 @@ def _random_bot_fn(message, history, _settings, _parameters):
     return bot_message
 
 
+DEFAULT_INSTRUCTIONS = """The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."""
 DEFAULT_INSTRUCTIONS_FALCON = """The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Falcon, and a human user, called User. In the following interactions, User and Falcon will converse in natural language, and Falcon will answer User's questions. Falcon was built to be respectful, polite and inclusive. Falcon was built by the Technology Innovation Institute in Abu Dhabi. Falcon will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. The conversation begins."""
 
 def _format_messages(history, message=None, system=None, format='plain', 
@@ -162,6 +163,24 @@ def _openai_stream_bot_fn(message, history, _settings, _parameters):
 
     _print_messages(history, message, bot_message)
 
+def _hf_gpt2_bot_fn(message, history, _settings, _parameters):
+    # NOTE: text_generation.Client got error for gpt2
+    kwargs = dict(temperature=max(0.001, _parameters['temperature']), max_new_tokens=min(250, _parameters['max_tokens'])) # max_new_tokens <= 250 for gpt2
+    import json
+    import requests
+    API_URL = "https://api-inference.huggingface.co/models/gpt2"
+    API_TOKEN = os.environ['HUGGINGFACEHUB_API_TOKEN']
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    def query(payload):
+        data = json.dumps(payload)
+        response = requests.request("POST", API_URL, headers=headers, data=data)
+        return json.loads(response.content.decode("utf-8"))
+    
+    # system, user_name, bot_name = DEFAULT_INSTRUCTIONS, 'Human', 'AI'
+    # prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name)
+    bot_message = query({'inputs': message, 'parameters': kwargs})[0]['generated_text']
+    return bot_message
+
 def _hf_stream_bot_fn(message, history, _settings, _parameters):
     # NOTE: temperature > 0 for HF models, max_new_tokens instead of max_tokens
     kwargs = dict(temperature=max(0.001, _parameters['temperature']), max_new_tokens=_parameters['max_tokens'])
@@ -174,7 +193,6 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
     client = Client(API_URL, headers=headers)
 
     system, user_name, bot_name = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon'
-
     prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name)
 
     # bot_message = client.generate(prompt, **kwargs).generated_text.strip().split(f'\n{user_name}')[0]
@@ -200,6 +218,7 @@ def bot_fn(message, history, *args):
     bot_message = {'random': _random_bot_fn,
         'gpt-3.5-turbo': _openai_stream_bot_fn,
         'gpt-3.5-turbo-16k': _openai_stream_bot_fn,
+        'gpt2': _hf_gpt2_bot_fn,
         'falcon-7b-instruct': _hf_stream_bot_fn,
         }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
     
