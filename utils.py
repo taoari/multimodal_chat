@@ -46,7 +46,7 @@ def parse_message(message):
     res["audios"] = [_trim_local_file(audio.source.get("src")) for audio in soup.find_all('audio')]
     res["videos"] = [_trim_local_file(video.source.get("src")) for video in soup.find_all('video')]
     res["files"] = [_trim_local_file(a.get("href")) for a in soup.find_all('a')]
-    res["buttons"] = [btn.text for btn in soup.find_all('button')]
+    res["buttons"] = [dict(text=btn.text, value=btn.value) for btn in soup.find_all('button')]
     
     # exclude img, audio, video, href texts in "text"
     for tag in ['img', 'audio', 'video', 'a', 'button']:
@@ -54,6 +54,17 @@ def parse_message(message):
             unwanted.extract()
     res["text"] = soup.text.strip()
     return res
+
+CARD_TEMPLATE = """  
+  <div class="card" style="max-width: 18rem;">
+    <img src="{image}" class="card-img-top" alt="{alt}">
+    <div class="card-body text-primary">
+      <h5 class="card-title">**{title}**</h5>
+      <p class="card-text">{text}</p>
+      {extra}
+    </div>
+  </div>
+"""
 
 def format_to_message(res):
     msg = res["text"] if "text" in res else ""
@@ -79,6 +90,14 @@ def format_to_message(res):
             # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
             btn_text, btn_value = (btn, btn) if isinstance(btn, str) else (btn['text'], btn['value'])
             msg += f' <button type="button" class="btn btn-primary btn-chatbot" value="{btn_value}">{btn_text}</button>'
+    if "cards" in res:
+        cards_msg = ""
+        for card in res["cards"]:
+            card = card.copy()
+            for key in ['image', 'title', 'text', 'extra']:
+                card[key] = card[key] if key in card else ""
+            cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **card)
+        msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
 
     return msg
 
