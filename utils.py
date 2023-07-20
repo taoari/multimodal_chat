@@ -77,7 +77,9 @@ def format_to_message(res):
         msg += '<br />'
         for btn in res["buttons"]:
             # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
-            msg += f' <button type="button" class="btn btn-primary btn-chatbot">{btn}</button>'
+            btn_text, btn_value = (btn, btn) if isinstance(btn, str) else (btn['text'], btn['value'])
+            msg += f' <button type="button" class="btn btn-primary btn-chatbot" value="{btn_value}">{btn_text}</button>'
+
     return msg
 
 
@@ -103,7 +105,7 @@ function registerMessageButtons() {
       // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
 	  collection[i].onclick=function() {
         elem = document.getElementById("inputTextBox").getElementsByTagName('textarea')[0];
-        elem.value = collection[i].innerHTML;
+        elem.value = collection[i].value; // use value instead of innerHTML
         elem.dispatchEvent(new Event('input', {
             view: window,
             bubbles: true,
