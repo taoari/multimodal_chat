@@ -101,7 +101,15 @@ function registerMessageButtons() {
 	const collection = document.querySelectorAll(".btn-chatbot");
 	for (let i = 0; i < collection.length; i++) {
       // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
-	  collection[i].onclick=function() {document.getElementById("inputTextBox").getElementsByTagName('textarea')[0].value = collection[i].innerHTML};
+	  collection[i].onclick=function() {
+        elem = document.getElementById("inputTextBox").getElementsByTagName('textarea')[0];
+        elem.value = collection[i].innerHTML;
+        elem.dispatchEvent(new Event('input', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+            }))
+        }
 	}
 }
 // need to make sure registerMessageButtons() is executed all the time as new message can come out;
