@@ -4,10 +4,19 @@ import random
 from pprint import pprint
 from dotenv import load_dotenv
 import os
+import json, requests
 
 from utils import parse_message, format_to_message
 
 load_dotenv()  # take environment variables from .env.
+
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+
+def print(*args, **kwargs):
+    sep = kwargs['sep'] if 'sep' in kwargs else ' '
+    logging.info(sep.join([str(val) for val in args]))
 
 # Used for Radio, CheckboxGroup, Dropdown for convert between text and display text
 TEXT2DISPLAY = { 
@@ -90,6 +99,7 @@ def _random_bot_fn(message, history, _settings, _parameters):
 DEFAULT_INSTRUCTIONS = """The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."""
 DEFAULT_INSTRUCTIONS_FALCON = """The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Falcon, and a human user, called User. In the following interactions, User and Falcon will converse in natural language, and Falcon will answer User's questions. Falcon was built to be respectful, polite and inclusive. Falcon was built by the Technology Innovation Institute in Abu Dhabi. Falcon will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. The conversation begins."""
 DEFAULT_INSTRUCTIONS_MPT = """A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers."""
+DEFAULT_INSTRUCTIONS_LLAMA = """You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."""
 
 def _format_messages(history, message=None, system=None, format='plain', 
         user_name='user', bot_name='assistant'):
@@ -108,7 +118,7 @@ def _format_messages(history, message=None, system=None, format='plain',
     
     elif format == 'chatml':
         if system:
-            _history.append('<|im_start|>system\n{system}<|im_end|>')
+            _history.append(f'<|im_start|>system\n{system}<|im_end|>')
         for human, ai in history:
             if human:
                 _history.append(f'<|im_start|>{user_name}\n{human}<|im_end|>')
@@ -118,6 +128,17 @@ def _format_messages(history, message=None, system=None, format='plain',
             _history.append(f'<|im_start|>{user_name}\n{message}<|im_end|>')
             _history.append(f'<|im_start|>{bot_name}\n')
         return '\n'.join(_history)
+
+    elif format == 'llama':
+        system = "" if system is None else system
+        _history.append(f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n ")
+        for human, ai in history:
+            human = "" if human is None else human
+            ai = "" if ai is None else ai
+            _history.append(f"{human} [/INST] {ai} </s><s> [INST] ")
+        if message:
+            _history.append(f"{message} [/INST] ")
+        return ''.join(_history)
     
     elif format == 'plain':
         if system:
@@ -147,9 +168,9 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 def _print_messages(history, message, bot_message, system=None,
-    user_name='user', bot_name='assistant'):
+    user_name='user', bot_name='assistant', format='plain'):
     """history is list of tuple [(user_msg, bot_msg), ...]"""
-    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name)
+    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=format)
     print(f'{bcolors.OKCYAN}{prompt}{bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
 
 
@@ -188,8 +209,6 @@ def _openai_stream_bot_fn(message, history, _settings, _parameters):
 def _hf_gpt2_bot_fn(message, history, _settings, _parameters):
     # NOTE: text_generation.Client got error for gpt2
     kwargs = dict(temperature=max(0.001, _parameters['temperature']), max_new_tokens=min(250, _parameters['max_tokens'])) # max_new_tokens <= 250 for gpt2
-    import json
-    import requests
     API_URL = "https://api-inference.huggingface.co/models/gpt2"
     API_TOKEN = os.environ['HUGGINGFACEHUB_API_TOKEN']
     headers = {"Authorization": f"Bearer {API_TOKEN}"}
@@ -220,11 +239,12 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
         system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
     elif chat_engine.startswith('mpt'):
         system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
+    elif chat_engine.lower().startswith('llama'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama'
     else:
         system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS, 'Human', 'AI', 'plain'
 
-    prompt = _format_messages(history, message, system=system, 
-            user_name=user_name, bot_name=bot_name, format=_format)
+    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
 
     # bot_message = client.generate(prompt, **kwargs).generated_text.strip().split(f'\n{user_name}')[0]
     bot_message = ""
@@ -235,7 +255,7 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
 
     bot_message = bot_message.strip().split(f'\n{user_name}')[0]
     _print_messages(history, message, bot_message, system=system, 
-            user_name=user_name, bot_name=bot_name)
+            user_name=user_name, bot_name=bot_name, format=_format)
     return bot_message
 
 def bot_fn(message, history, *args):
