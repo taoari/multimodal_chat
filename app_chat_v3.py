@@ -1,5 +1,6 @@
 # app.py : Multimodal Chatbot
 import os
+import time
 import logging
 from pprint import pprint
 from dotenv import load_dotenv
@@ -72,16 +73,18 @@ def _create_from_dict(PARAMS):
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
-from app_chat_bot_fn import _bot_slash_fn, _llm_call
+from app_chat_bot_fn import _bot_slash_fn, _llm_call, _llm_call_langchain
 
 def bot_fn(message, history, *args):
+    __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
     kwargs['chat_engine'] = 'gpt-3.5-turbo-16k' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     if message.startswith('/'):
         bot_message = _bot_slash_fn(message, history, **kwargs)
     else:
-        bot_message = _llm_call(message, history, **kwargs)
+        # bot_message = _llm_call(message, history, **kwargs)
+        bot_message = _llm_call_langchain(message, history, **kwargs)
     
     if isinstance(bot_message, str):
         yield bot_message
@@ -89,7 +92,8 @@ def bot_fn(message, history, *args):
         for m in bot_message:
             yield m
         # bot_message = m # for printing
-
+    __TOC = time.time()
+    print(f'Elapsed time: {__TOC-__TIC}')
     print(kwargs)
 
 ################################################################
