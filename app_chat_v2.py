@@ -12,19 +12,11 @@ load_dotenv()  # take environment variables from .env.
 
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+logging.basicConfig(level=logging.WARN, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
 
 def print(*args, **kwargs):
     sep = kwargs['sep'] if 'sep' in kwargs else ' '
-    logging.info(sep.join([str(val) for val in args]))
-
-# Used for Radio, CheckboxGroup, Dropdown for convert between text and display text
-TEXT2DISPLAY = { 
-        'auto': 'Auto', 'random': 'Random', 'openai': 'OpenAI', # for chat engine
-        'gpt-3.5-turbo': 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k': 'gpt-3.5-turbo-16k',
-        'gpt2': 'GPT-2', 
-        # 'falcon-7b-instruct': 'Falcon (7b Instruct)',
-    }
+    logging.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
 
 HF_ENDPOINTS = {}
 
@@ -34,18 +26,7 @@ def parse_endpoints_from_environ():
         if name.startswith('HF_INFERENCE_ENDPOINT_'):
             HF_ENDPOINTS[name[len('HF_INFERENCE_ENDPOINT_'):].lower()] = value
 
-def register_endpoints_to_text2display(TEXT2DISPLAY):
-    for _name, _value in HF_ENDPOINTS.items():
-        if 'huggingface.co' in _value:
-            TEXT2DISPLAY[_name] = f'HF ({_name})'
-        else:
-            TEXT2DISPLAY[_name] = f'Self-Host ({_name})'
-
-
 parse_endpoints_from_environ()
-register_endpoints_to_text2display(TEXT2DISPLAY)
-
-DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
 
 #################################################################################
 
@@ -58,10 +39,8 @@ Simply enter text and press ENTER in the textbox to interact with the chatbot.
 """
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, 
-            ['auto', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt2'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
-            )),
-            value=TEXT2DISPLAY['auto'], 
+    'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-16k', 'gpt-4'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
+            value='auto', 
             interactive=True, label="Chat engine"),
 }
 
@@ -100,6 +79,7 @@ DEFAULT_INSTRUCTIONS = """The following is a friendly conversation between a hum
 DEFAULT_INSTRUCTIONS_FALCON = """The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Falcon, and a human user, called User. In the following interactions, User and Falcon will converse in natural language, and Falcon will answer User's questions. Falcon was built to be respectful, polite and inclusive. Falcon was built by the Technology Innovation Institute in Abu Dhabi. Falcon will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. The conversation begins."""
 DEFAULT_INSTRUCTIONS_MPT = """A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers."""
 DEFAULT_INSTRUCTIONS_LLAMA = """You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."""
+DEFAULT_INSTRUCTIONS_LLAMA = """"""
 
 def _format_messages(history, message=None, system=None, format='plain', 
         user_name='user', bot_name='assistant'):
@@ -264,16 +244,16 @@ def bot_fn(message, history, *args):
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
 
-    _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
-    _settings['chat_engine'] = 'gpt-3.5-turbo' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
+    _settings['chat_engine'] = 'gpt-3.5-turbo-16k' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
 
     if _settings['chat_engine'] in HF_ENDPOINTS:
         bot_message = _hf_stream_bot_fn(message, history, _settings, _parameters)
     else:
         bot_message = {'random': _random_bot_fn,
-            'gpt-3.5-turbo': _openai_stream_bot_fn,
+            # 'gpt-3.5-turbo': _openai_stream_bot_fn,
             'gpt-3.5-turbo-16k': _openai_stream_bot_fn,
-            'gpt2': _hf_gpt2_bot_fn,
+            'gpt-4': _openai_stream_bot_fn,
+            # 'gpt2': _hf_gpt2_bot_fn,
             # 'falcon-7b-instruct': _hf_stream_bot_fn,
             }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
     
@@ -296,6 +276,9 @@ def get_demo():
 min-height: 600px;
 }"""
 
+    # _chatbot = gr.Chatbot(elem_id="chatbot", avatar_images = ("user.png", "bot.png"))
+    # _textbox = gr.Textbox(container=False, show_label=False, placeholder="Type a message...", scale=10, elem_id='inputTextBox', min_width=300)
+    
     with gr.Blocks(css=css) as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
@@ -310,9 +293,10 @@ min-height: 600px;
 
             with gr.Column(scale=9):
                 import chat_interface
-                chatbot = chat_interface.ChatInterface(bot_fn,
+                chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(settings.values()) + list(parameters.values()),
-                        )
+                        retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
+                    )
 
                 with gr.Accordion("Examples", open=False) as examples_accordin:
                     chat_examples = gr.Examples(

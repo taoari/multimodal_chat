@@ -9,6 +9,12 @@ text_generation
 huggingface_hub
 langchain
 
+# for llm tools
+google-search-results
+
+# for OCR
+pytesseract
+
 # stable diffusion
 stability-sdk
 # langdetect

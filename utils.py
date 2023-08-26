@@ -89,7 +89,7 @@ def format_to_message(res):
         for btn in res["buttons"]:
             # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
             btn_text, btn_value = (btn, btn) if isinstance(btn, str) else (btn['text'], btn['value'])
-            msg += f' <button type="button" class="btn btn-primary btn-chatbot" value="{btn_value}">{btn_text}</button>'
+            msg += f' <a class="btn btn-primary btn-chatbot text-white" value="{btn_value}">{btn_text}</a>'
     if "cards" in res:
         cards_msg = ""
         for card in res["cards"]:
@@ -124,13 +124,13 @@ function registerMessageButtons() {
       // NOTE: gradio use .value instead of .innerHTML for gr.Textbox
 	  collection[i].onclick=function() {
         elem = document.getElementById("inputTextBox").getElementsByTagName('textarea')[0];
-        elem.value = collection[i].value; // use value instead of innerHTML
+        elem.value = collection[i].getAttribute("value"); // use value instead of innerHTML
         elem.dispatchEvent(new Event('input', {
             view: window,
             bubbles: true,
             cancelable: true
             }))
-        }
+        };  
 	}
 }
 // need to make sure registerMessageButtons() is executed all the time as new message can come out;

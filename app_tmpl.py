@@ -8,12 +8,14 @@ from utils import parse_message, format_to_message
 
 load_dotenv()  # take environment variables from .env.
 
-# Used for Radio, CheckboxGroup, Dropdown for convert between text and display text
-TEXT2DISPLAY = { 
-        'auto': 'Auto', 'random': 'Random', 'openai': 'OpenAI', # for chat engine
-    }
+import logging
 
-DISPLAY2TEXT = {v:k for k,v in TEXT2DISPLAY.items()}
+logging.basicConfig(level=logging.WARN, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+
+def print(*args, **kwargs):
+    sep = kwargs['sep'] if 'sep' in kwargs else ' '
+    logging.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
+
 
 #################################################################################
 
@@ -24,7 +26,7 @@ Markdown description here.
 """
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=list(map(TEXT2DISPLAY.get, ['auto', 'random', 'openai'])), value=TEXT2DISPLAY['auto'], 
+    'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'openai'], value='auto', 
             interactive=True, label="Chat engine"),
 }
 
@@ -98,12 +100,10 @@ def _openai_bot_stream_fn(message, history, _settings, _parameters):
         yield bot_message.strip() # accumulated message can easily be postprocessed
 
 def bot_fn(message, history, *args):
-    yield "" # Not crash if empty user input
 
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
 
-    _settings['chat_engine'] = DISPLAY2TEXT[_settings['chat_engine']]
     _settings['chat_engine'] = 'random' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
 
     bot_message = {'random': _random_bot_fn,
@@ -141,10 +141,11 @@ min-height: 600px;
                     parameters = _create_from_dict(PARAMETERS)
 
             with gr.Column(scale=9):
-                import chat_interface
-                chatbot = chat_interface.ChatInterface(bot_fn,
+                # import chat_interface
+                chatbot = gr.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(settings.values()) + list(parameters.values()),
-                        )
+                        retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
+                    )
 
                 with gr.Accordion("Examples", open=False) as examples_accordin:
                     chat_examples = gr.Examples(
