@@ -27,7 +27,7 @@ DESCRIPTION = """
 Markdown description here. Features:
 
 * Upload button (auto displayed)
-* Session state (additional outputs)
+* Session state and status info (additional outputs)
 * Chatbot messages:
   * Avatar images (auto displayed)
   * Buttons (type in "button")
