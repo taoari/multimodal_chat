@@ -70,34 +70,34 @@ def _create_from_dict(PARAMS):
 # Bot fn
 ################################################################
 
-mrkl = None
+memory = None
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
     session_state = kwargs['session_state']
 
     # TODO: mrkl is shared accross users, need to be in sesson state
-    global mrkl
-    if mrkl is None:
-        from langchain.agents import initialize_agent, Tool
-        from langchain.agents import AgentType
-        from langchain.chat_models import ChatOpenAI
+    from langchain.agents import initialize_agent, Tool
+    from langchain.agents import AgentType
+    from langchain.chat_models import ChatOpenAI
 
-        # llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-0613")
-        llm = _get_llm(chat_engine=kwargs.get('chat_engine', "gpt-3.5-turbo-0613"), temperature=0)
-        
-        from tools.utils import get_tool
-        tools = [get_tool(name, llm=llm) for name in kwargs['tools']]
+    # llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-0613")
+    llm = _get_llm(chat_engine=kwargs.get('chat_engine', "gpt-3.5-turbo-0613"), temperature=0)
+    
+    from tools.utils import get_tool
+    tools = [get_tool(name, llm=llm) for name in kwargs['tools']]
 
-        from langchain.prompts import MessagesPlaceholder
-        from langchain.memory import ConversationBufferMemory
+    from langchain.prompts import MessagesPlaceholder
+    from langchain.memory import ConversationBufferMemory
 
-        agent_kwargs = {
-            "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
-        }
+    agent_kwargs = {
+        "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
+    }
+    global memory
+    if memory is None:
         memory = ConversationBufferMemory(memory_key="memory", return_messages=True)
 
-        mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
-                    agent_kwargs=agent_kwargs, memory=memory)
+    mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
+                agent_kwargs=agent_kwargs, memory=memory)
         
     from utils import parse_message
     msg_dict = parse_message(message)
