@@ -232,6 +232,7 @@ min-height: 600px;
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
                         additional_outputs=[KWARGS['image']],
+                        upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
 

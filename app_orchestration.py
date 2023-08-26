@@ -173,7 +173,7 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
 
 
 def _is_document_qa(session_state):
-    cond1 = 'current_file' in session_state and session_state['current_file'].endswith('.pdf')
+    cond1 = 'current_file' in session_state and session_state['current_file'] is not None and session_state['current_file'].endswith('.pdf')
     cond2 = 'current_vs' in SESSION_STATE and SESSION_STATE['current_vs'] is not None
     return cond1 and cond2
 
@@ -188,7 +188,7 @@ def bot_fn(message, history, *args):
     msg_dict = parse_message(message)
     if len(msg_dict['images']) > 0:
         session_state['current_file'] = msg_dict['images'][-1]
-        session_state['context'] = None
+        # session_state['context'] = None
         SESSION_STATE['current_vs'] = None
     elif len(msg_dict['files']) > 0:
         session_state['current_file'] = msg_dict['files'][-1]
@@ -205,7 +205,7 @@ def bot_fn(message, history, *args):
             context = '\n\n'.join([doc.page_content for doc in res])
             _kwargs = {'system_prompt': context, **kwargs}
             bot_message = _llm_call_stream(message, history, **_kwargs)
-            session_state['context'] = context
+            # session_state['context'] = context
         else:
             bot_message = format_to_message(dict(
                     text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
@@ -275,6 +275,7 @@ min-height: 600px;
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
                         additional_outputs=[KWARGS['session_state'], KWARGS['status']] if 'session_state' in KWARGS else None,
+                        upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
 

@@ -68,7 +68,7 @@ class ChatInterface(Blocks):
         theme: Theme | str | None = None,
         css: str | None = None,
         analytics_enabled: bool | None = None,
-        upload_btn: str | None | Button = "📁",
+        upload_btn: str | None | Button = None, # "📁",
         submit_btn: str | None | Button = "Submit",
         stop_btn: str | None | Button = "Stop",
         retry_btn: str | None | Button = "🔄  Retry",

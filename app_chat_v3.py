@@ -131,10 +131,11 @@ min-height: 600px;
                 # chatbot
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
-                import chat_interface
-                chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
+                # import chat_interface
+                chatbot = gr.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
                         # additional_outputs=[KWARGS['session_state']] if 'session_state' in KWARGS else None,
+                        # upload_btn=None,
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
 
