@@ -1,4 +1,5 @@
 # app.py : Multimodal Chatbot
+import os
 import logging
 import time
 from pprint import pprint
@@ -21,7 +22,8 @@ def print(*args, **kwargs):
 # Global variables
 ################################################################
 
-from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain
+from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream
+from utils import parse_message, format_to_message, get_spinner
 AVAILABLE_TOOLS = ['Search', 'OCR']
 
 #########
@@ -34,8 +36,10 @@ DESCRIPTION = """
 Simply enter text and press ENTER in the textbox to interact with the chatbot.
 """
 
+_default_session_state = dict(current_file=None, context=None)
+
 ATTACHMENTS = {
-    'session_state': dict(cls='State', value={}),
+    'session_state': dict(cls='State', value=_default_session_state),
     # 'image': dict(cls='Image', type='filepath'), #, source='webcam'),
     # 'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
     'status': dict(cls='JSON', label='Status'),
@@ -43,7 +47,7 @@ ATTACHMENTS = {
 
 SETTINGS = {
     'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
-            value=AVAILABLE_TOOLS,
+            value=[t for t in AVAILABLE_TOOLS if t not in {"Search"}],
             interactive=True, label='Tools'),
     'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4'] + list(HF_ENDPOINTS.keys()),
             value='auto', 
@@ -54,6 +58,10 @@ PARAMETERS = {
 }
     
 KWARGS = {} # use for chatbot additional_inputs, do NOT change
+
+SESSION_STATE = {"current_vs": None} # for complex object
+
+DEBUG = True
     
 ################################################################
 # utils
@@ -65,6 +73,52 @@ def _create_from_dict(PARAMS):
         cls_ = kwargs['cls']; del kwargs['cls']
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
+
+def _build_vs(fname, chunk_size=0, persist_directory=None, verbose=False):
+    from langchain.document_loaders import PyPDFLoader
+    loader = PyPDFLoader(fname)
+    pages = loader.load()
+
+    print(f'len(pages) = {len(pages)}')
+
+    if chunk_size > 0:
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        r_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=0,
+            separators=["\n\n", "\n", "(?<=\. )", " ", ""]
+        )
+        docs = r_splitter.split_documents(pages)
+    else:
+        docs = pages
+
+    print(f'len(docs) = {len(docs)}')
+
+    from langchain.embeddings import HuggingFaceEmbeddings
+    embedding = HuggingFaceEmbeddings()
+
+    from langchain.vectorstores import Chroma
+    vectordb = Chroma.from_documents(
+        documents=docs,
+        embedding=embedding,
+        persist_directory=persist_directory
+    )
+    if persist_directory is not None:
+        vectordb.persist()
+    print(f'vector db for {fname} done!')
+
+    return vectordb
+
+def _load_vs(persist_directory):
+    from langchain.embeddings import HuggingFaceEmbeddings
+    embedding = HuggingFaceEmbeddings()
+
+    from langchain.vectorstores import Chroma
+    vectordb = Chroma(
+        embedding=embedding,
+        persist_directory=persist_directory
+    )
+    return vectordb
 
 ################################################################
 # Bot fn
@@ -108,23 +162,57 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
         _msg = msg_dict['text']
     return mrkl.run(_msg)
 
+
+def _is_document_qa(session_state):
+    cond1 = 'current_file' in session_state and session_state['current_file'].endswith('.pdf')
+    cond2 = 'current_vs' in SESSION_STATE and SESSION_STATE['current_vs'] is not None
+    return cond1 and cond2
+
 def bot_fn(message, history, *args):
+    global SESSION_STATE
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
 
     session_state = kwargs['session_state']
     kwargs['chat_engine'] = 'gpt-3.5-turbo-16k' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
-    # TODO: 1. agent history
-    # 2. fallback LLM
-    # need to modify kwargs['session_state']['current_file']
-    try:
-        bot_message = _langchain_agent_bot_fn(message, history, **kwargs)
-    except:
-        bot_message = _llm_call_langchain(message, history, **kwargs)
+    msg_dict = parse_message(message)
+    if len(msg_dict['images']) > 0:
+        session_state['current_file'] = msg_dict['images'][-1]
+        session_state['context'] = None
+        SESSION_STATE['current_vs'] = None
+    elif len(msg_dict['files']) > 0:
+        session_state['current_file'] = msg_dict['files'][-1]
+        yield get_spinner() + f"Building vector store for **{os.path.basename(session_state['current_file'])}**, please be patient.", session_state, session_state
+        if session_state['current_file'].endswith('.pdf'):
+            vs = _build_vs(session_state['current_file'])
+            SESSION_STATE['current_vs'] = vs
+
+    if _is_document_qa(session_state):
+        # Document QA if a PDF file is uploaded
+        if  msg_dict['text']:
+            vectordb = SESSION_STATE['current_vs']
+            res = vectordb.similarity_search(msg_dict['text'])
+            context = '\n\n'.join([doc.page_content for doc in res])
+            _kwargs = {'system_prompt': context, **kwargs}
+            bot_message = _llm_call_stream(message, history, **_kwargs)
+            session_state['context'] = context
+        else:
+            bot_message = format_to_message(dict(
+                    text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
+                    buttons=[dict(text='Summarize', value="Summarize the text.")],
+                ))
+    else:
+        # TODO: 1. agent history
+        # 2. fallback LLM
+        # need to modify kwargs['session_state']['current_file']
+        try:
+            bot_message = _langchain_agent_bot_fn(message, history, **kwargs)
+        except:
+            bot_message = _llm_call_stream(message, history, **kwargs)
     
     session_state['message'] = message
-    status = {**session_state}
+    status = {**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys())}
     
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
@@ -220,7 +308,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     import langchain
-    langchain.debug = args.debug
+    langchain.debug = DEBUG
 
     demo = get_demo()
     from utils import reload_javascript
