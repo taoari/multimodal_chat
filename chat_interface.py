@@ -149,7 +149,7 @@ class ChatInterface(Blocks):
                 if chatbot:
                     self.chatbot = chatbot.render()
                 else:
-                    self.chatbot = Chatbot(label="Chatbot", elem_id="chatbot", avatar_images = ("user.png", "bot.png"))
+                    self.chatbot = Chatbot(label="Chatbot", elem_id="chatbot", avatar_images = ("assets/user.png", "assets/bot.png"))
 
                 with Group():
                     with Row():
