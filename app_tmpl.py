@@ -1,5 +1,6 @@
 # app.py : Multimodal Chatbot
 import logging
+import time
 from pprint import pprint
 from dotenv import load_dotenv
 import gradio as gr
@@ -65,6 +66,7 @@ def _create_from_dict(PARAMS):
 from app_tmpl_bot_fn import _random_bot_fn, _openai_bot_fn, _openai_stream_bot_fn
 
 def _bot_fn(message, history, *args):
+    __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
 
     kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
@@ -80,10 +82,14 @@ def _bot_fn(message, history, *args):
         for m in bot_message:
             yield m
 
+    __TOC = time.time()
+    print(f'Elapsed time: {__TOC-__TIC}')
     print(kwargs)
     pprint(history + [[message, bot_message]])
 
+
 def _bot_fn_session_state(message, history, *args):
+    __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
 
     session_state = kwargs['session_state']
@@ -95,13 +101,18 @@ def _bot_fn_session_state(message, history, *args):
         }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     session_state['message'] = message
+    status = {**session_state}
     
     if isinstance(bot_message, str):
-        yield bot_message, session_state, session_state
+        __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
+        yield bot_message, session_state, status
     else:
         for m in bot_message:
-            yield m, session_state, session_state
+            __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
+            yield m, session_state, status
 
+    __TOC = time.time()
+    print(f'Elapsed time: {__TOC-__TIC}')
     print(kwargs)
     pprint(history + [[message, bot_message]])
     session_state['previous_message'] = message
