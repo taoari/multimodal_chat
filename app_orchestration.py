@@ -177,6 +177,13 @@ def _is_document_qa(session_state):
     cond2 = 'current_vs' in SESSION_STATE and SESSION_STATE['current_vs'] is not None
     return cond1 and cond2
 
+def _beautify_status(status):
+    max_len = 100
+    if 'context' in status and status['context'] is not None and len(status['context']) >= max_len:
+        status['context'] = status['context'][:max_len] + ' ...(truncated)'
+
+    return status
+
 def bot_fn(message, history, *args):
     global SESSION_STATE
     __TIC = time.time()
@@ -188,7 +195,7 @@ def bot_fn(message, history, *args):
     msg_dict = parse_message(message)
     if len(msg_dict['images']) > 0:
         session_state['current_file'] = msg_dict['images'][-1]
-        # session_state['context'] = None
+        session_state['context'] = None
         SESSION_STATE['current_vs'] = None
     elif len(msg_dict['files']) > 0:
         session_state['current_file'] = msg_dict['files'][-1]
@@ -205,7 +212,7 @@ def bot_fn(message, history, *args):
             context = '\n\n'.join([doc.page_content for doc in res])
             _kwargs = {'system_prompt': context, **kwargs}
             bot_message = _llm_call_stream(message, history, **_kwargs)
-            # session_state['context'] = context
+            session_state['context'] = context
         else:
             bot_message = format_to_message(dict(
                     text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
@@ -221,7 +228,7 @@ def bot_fn(message, history, *args):
             bot_message = _llm_call_stream(message, history, **kwargs)
     
     session_state['message'] = message
-    status = {**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys())}
+    status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys())})
     
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
