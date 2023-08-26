@@ -141,7 +141,6 @@ def _openai_langchain_bot_fn(message, history, **kwargs):
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
     from langchain.chat_models import ChatOpenAI
     llm = ChatOpenAI(model=kwargs.get('chat_engine', 'gpt-3.5-turbo'), **_kwargs)
-    # return llm.predict(_format_messages(history, message, system=system, format='langchain_chat'))
     return llm(_format_messages(history, message, system=system, format='langchain_chat')).content
 
 def _openai_stream_bot_fn(message, history, **kwargs):
@@ -164,6 +163,38 @@ def _openai_stream_bot_fn(message, history, **kwargs):
         yield bot_message.strip() # accumulated message can easily be postprocessed
     _print_messages(history, message, bot_message, system=system)
 
+def __hf_helper_fn(chat_engine):
+    if chat_engine.startswith('falcon'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
+    elif chat_engine.startswith('mpt'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
+    elif chat_engine.lower().startswith('llama'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama'
+    else:
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS, 'Human', 'AI', 'plain'
+    return system, user_name, bot_name, _format
+
+def _hf_bot_fn(message, history, **kwargs):
+    # NOTE: temperature > 0 for HF models, max_new_tokens instead of max_tokens
+    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
+                   max_new_tokens=kwargs.get('max_tokens', 512))
+
+    from text_generation import Client
+    chat_engine = kwargs['chat_engine']
+    # API_URL = 'https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct'
+    API_URL = HF_ENDPOINTS[chat_engine]
+    API_TOKEN = os.environ['HUGGINGFACEHUB_API_TOKEN']
+
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    client = Client(API_URL, headers=headers)
+    
+    system, user_name, bot_name, _format = __hf_helper_fn(chat_engine)
+    system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else system
+    prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
+
+    bot_message = client.generate(prompt, **_kwargs).generated_text.strip().split(f'\n{user_name}')[0]
+    return bot_message
+
 def _hf_stream_bot_fn(message, history, **kwargs):
     # NOTE: temperature > 0 for HF models, max_new_tokens instead of max_tokens
     _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
@@ -178,15 +209,7 @@ def _hf_stream_bot_fn(message, history, **kwargs):
     headers = {"Authorization": f"Bearer {API_TOKEN}"}
     client = Client(API_URL, headers=headers)
 
-    if chat_engine.startswith('falcon'):
-        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
-    elif chat_engine.startswith('mpt'):
-        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
-    elif chat_engine.lower().startswith('llama'):
-        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama'
-    else:
-        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS, 'Human', 'AI', 'plain'
-    
+    system, user_name, bot_name, _format = __hf_helper_fn(chat_engine)
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else system
     prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
 
@@ -202,10 +225,6 @@ def _hf_stream_bot_fn(message, history, **kwargs):
     bot_message = bot_message.strip().split(stop_word)[0]
     _print_messages(history, message, bot_message, system=system, 
             user_name=user_name, bot_name=bot_name, format=_format)
-    # bot_message = client.generate(prompt, **_kwargs).generated_text.strip().split(f'\n{user_name}')[0]
-    # _print_messages(history, message, bot_message, system=system, 
-    #         user_name=user_name, bot_name=bot_name, format=_format)
-    # return bot_message
 
 def _bot_slash_fn(message, history, **kwargs):
     bot_message = message
@@ -214,8 +233,17 @@ def _bot_slash_fn(message, history, **kwargs):
 def _llm_call(message, history, **kwargs):
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
     if chat_engine.startswith('gpt'):
+        bot_message = _openai_bot_fn(message, history, **kwargs)
+    elif chat_engine in HF_ENDPOINTS:
+        bot_message = _hf_bot_fn(message, history, **kwargs)
+    else:
+        bot_message = f'ERROR: Invalid chat_engine: {chat_engine}'
+    return bot_message
+
+def _llm_call_stream(message, history, **kwargs):
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    if chat_engine.startswith('gpt'):
         bot_message = _openai_stream_bot_fn(message, history, **kwargs)
-        # bot_message = _openai_langchain_bot_fn(message, history, **kwargs)
     elif chat_engine in HF_ENDPOINTS:
         bot_message = _hf_stream_bot_fn(message, history, **kwargs)
     else:
@@ -223,7 +251,6 @@ def _llm_call(message, history, **kwargs):
     return bot_message
 
 def _get_llm(chat_engine='gpt-3.5-turbo', **kwargs):
-    system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
     # chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
 
     if chat_engine.startswith('gpt'):
@@ -257,15 +284,7 @@ def _llm_call_langchain(message, history, **kwargs):
     elif chat_engine in HF_ENDPOINTS:
         # _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
         #             max_new_tokens=kwargs.get('max_tokens', 512))
-        if chat_engine.startswith('falcon'):
-            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
-        elif chat_engine.startswith('mpt'):
-            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
-        elif chat_engine.lower().startswith('llama'):
-            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama'
-        else:
-            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS, 'Human', 'AI', 'plain'
-        
+        system, user_name, bot_name, _format = __hf_helper_fn(chat_engine)
         system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else system
         prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
         # from langchain.llms import HuggingFaceTextGenInference

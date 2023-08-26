@@ -22,7 +22,7 @@ def print(*args, **kwargs):
 # Extra loading
 ################################################################
 
-from app_chat_bot_fn import HF_ENDPOINTS
+from llms import HF_ENDPOINTS
 from prompts import PROMPTS, split_prompt
 
 ################################################################
@@ -73,7 +73,7 @@ def _create_from_dict(PARAMS):
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
-from app_chat_bot_fn import _bot_slash_fn, _llm_call, _llm_call_langchain
+from llms import _bot_slash_fn, _llm_call, _llm_call_stream, _llm_call_langchain
 
 def bot_fn(message, history, *args):
     __TIC = time.time()
@@ -84,7 +84,8 @@ def bot_fn(message, history, *args):
         bot_message = _bot_slash_fn(message, history, **kwargs)
     else:
         # bot_message = _llm_call(message, history, **kwargs)
-        bot_message = _llm_call_langchain(message, history, **kwargs)
+        bot_message = _llm_call_stream(message, history, **kwargs)
+        # bot_message = _llm_call_langchain(message, history, **kwargs)
     
     if isinstance(bot_message, str):
         yield bot_message
