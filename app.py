@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 load_dotenv()  # take environment variables from .env.
 
 import app_template
-import app_chat
 import app_chat_v3
 import app_create
 
