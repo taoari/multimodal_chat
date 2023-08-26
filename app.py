@@ -4,15 +4,14 @@ from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
 
-import app_template
+import app_tmpl
 import app_chat_v3
 import app_create
 
 TABS = {
     'AI Chat': app_chat_v3.get_demo,
-    # 'AI Chat': app_chat.get_demo,
     'AI Create': app_create.get_demo,
-    # 'Template': app_template.get_demo,
+    'Template': app_tmpl.get_demo,
 }
 
 css="""#chatbot {

@@ -39,10 +39,13 @@ ATTACHMENTS = {
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'openai'], value='auto', 
             interactive=True, label="Chat engine"),
+    'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
 }
 
 PARAMETERS = {
 }
+
+KWARGS = {}
 
 #################################################################################
 
@@ -53,7 +56,7 @@ def _create_from_dict(PARAMS):
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
-def _random_bot_fn(message, history, _settings, _parameters):
+def _random_bot_fn(message, history, **kwargs):
     # Example multimodal messages
     samples = [
         format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
@@ -80,7 +83,7 @@ def _random_bot_fn(message, history, _settings, _parameters):
         bot_message = random.choice(samples)
     return bot_message
 
-def _openai_bot_fn(message, history, _settings, _parameters):
+def _openai_bot_fn(message, history, **kwargs):
     import openai, os
     openai.api_key = os.environ["OPENAI_API_KEY"]
 
@@ -92,7 +95,7 @@ def _openai_bot_fn(message, history, _settings, _parameters):
     )
     return resp.choices[0].message.content
 
-def _openai_bot_stream_fn(message, history, _settings, _parameters):
+def _openai_bot_stream_fn(message, history, **kwargs):
     import openai, os
     openai.api_key = os.environ["OPENAI_API_KEY"]
 
@@ -111,15 +114,13 @@ def _openai_bot_stream_fn(message, history, _settings, _parameters):
         yield bot_message.strip() # accumulated message can easily be postprocessed
 
 def bot_fn(message, history, *args):
+    kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
 
-    _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
-    _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
-
-    _settings['chat_engine'] = 'random' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
+    kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     bot_message = {'random': _random_bot_fn,
         'openai': _openai_bot_stream_fn,
-        }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
+        }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     if isinstance(bot_message, str):
         for i in range(len(bot_message)):
@@ -128,7 +129,7 @@ def bot_fn(message, history, *args):
         for m in bot_message:
             yield m
 
-    print(_settings); print(_parameters)
+    print(kwargs)
     pprint(history + [[message, bot_message]])
 
 
@@ -156,9 +157,11 @@ min-height: 600px;
                     parameters = _create_from_dict(PARAMETERS)
 
             with gr.Column(scale=9):
+                global KWARGS
+                KWARGS = {**attachments, **settings, **parameters}
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
-                        additional_inputs=list(settings.values()) + list(parameters.values()),
+                        additional_inputs=list(KWARGS.values()),
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
 
