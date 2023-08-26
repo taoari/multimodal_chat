@@ -11,6 +11,9 @@ langchain
 
 # for llm tools
 google-search-results
+pypdf
+sentence_transformers # embedding
+chromadb
 
 # for OCR
 pytesseract

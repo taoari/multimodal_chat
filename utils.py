@@ -101,6 +101,10 @@ def format_to_message(res):
 
     return msg
 
+def get_spinner(text="Loading...", variant='primary'):
+    return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status">
+  <span class="visually-hidden">{text}</span>
+</div>"""
 
 def get_temp_file_name(prefix='gradio/app-', suffix='.png'):
     import tempfile

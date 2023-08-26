@@ -124,6 +124,8 @@ def _print_messages(history, message, bot_message, system=None,
 ################################################################
 
 def _random_bot_fn(message, history, **kwargs):
+    from utils import get_spinner
+
     # Example multimodal messages
     samples = [
         format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
@@ -139,6 +141,8 @@ def _random_bot_fn(message, history, **kwargs):
                  title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads, with silver-gray fur surrounding those points.",
                  extra="""<a href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" class="btn btn-primary btn-sm text-white">More</a>"""),
         ])),
+        get_spinner() + " Please be patient",
+
     ]
     if 'pdf' in message:
         bot_message = samples[4]
@@ -146,6 +150,8 @@ def _random_bot_fn(message, history, **kwargs):
         bot_message = samples[5]
     elif 'card' in message:
         bot_message = samples[6]
+    elif 'spin' in message:
+        bot_message = samples[7]
     else:
         bot_message = random.choice(samples)
     return bot_message
