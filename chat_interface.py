@@ -15,6 +15,7 @@ from gradio_client.documentation import document, set_documentation_group
 from gradio.blocks import Blocks
 from gradio.components import (
     Button,
+    UploadButton,
     Chatbot,
     IOComponent,
     Markdown,
@@ -59,6 +60,7 @@ class ChatInterface(Blocks):
         textbox: Textbox | None = None,
         additional_inputs: str | IOComponent | list[str | IOComponent] | None = None,
         additional_inputs_accordion_name: str = "Additional Inputs",
+        additional_outputs: str | IOComponent | list[str | IOComponent] | None = None,
         examples: list[str] | None = None,
         cache_examples: bool | None = None,
         title: str | None = None,
@@ -66,6 +68,7 @@ class ChatInterface(Blocks):
         theme: Theme | str | None = None,
         css: str | None = None,
         analytics_enabled: bool | None = None,
+        upload_btn: str | None | Button = "📁",
         submit_btn: str | None | Button = "Submit",
         stop_btn: str | None | Button = "Stop",
         retry_btn: str | None | Button = "🔄  Retry",
@@ -124,6 +127,15 @@ class ChatInterface(Blocks):
         else:
             self.additional_inputs = []
         self.additional_inputs_accordion_name = additional_inputs_accordion_name
+        
+        if additional_outputs:
+            if not isinstance(additional_outputs, list):
+                additional_outputs = [additional_outputs]
+            self.additional_outputs = [
+                get_component_instance(i, render=False) for i in additional_outputs  # type: ignore
+            ]
+        else:
+            self.additional_outputs = []
 
         with self:
             if title:
@@ -137,10 +149,22 @@ class ChatInterface(Blocks):
                 if chatbot:
                     self.chatbot = chatbot.render()
                 else:
-                    self.chatbot = Chatbot(label="Chatbot")
+                    self.chatbot = Chatbot(label="Chatbot", elem_id="chatbot", avatar_images = ("user.png", "bot.png"))
 
                 with Group():
                     with Row():
+                        if upload_btn:
+                            if isinstance(upload_btn, UploadButton):
+                                upload_btn.render()
+                            elif isinstance(upload_btn, str):
+                                upload_btn = UploadButton(
+                                    upload_btn, scale=0.1, min_width=0
+                                )
+                            else:
+                                raise ValueError(
+                                    f"The upload_btn parameter must be a gr.UploadButton, string, or None, not {type(upload_btn)}"
+                                )
+                        self.buttons.append(upload_btn)
                         if textbox:
                             textbox.container = False
                             textbox.show_label = False
@@ -153,6 +177,7 @@ class ChatInterface(Blocks):
                                 placeholder="Type a message...",
                                 scale=7,
                                 autofocus=autofocus,
+                                elem_id='inputTextBox',
                             )
                         if submit_btn:
                             if isinstance(submit_btn, Button):
@@ -162,7 +187,7 @@ class ChatInterface(Blocks):
                                     submit_btn,
                                     variant="primary",
                                     scale=1,
-                                    min_width=150,
+                                    min_width=0,
                                 )
                             else:
                                 raise ValueError(
@@ -178,7 +203,7 @@ class ChatInterface(Blocks):
                                     variant="stop",
                                     visible=False,
                                     scale=1,
-                                    min_width=150,
+                                    min_width=0,
                                 )
                             else:
                                 raise ValueError(
@@ -192,7 +217,7 @@ class ChatInterface(Blocks):
                             if isinstance(btn, Button):
                                 btn.render()
                             elif isinstance(btn, str):
-                                btn = Button(btn, variant="secondary")
+                                btn = Button(btn, variant="secondary", min_width=0)
                             else:
                                 raise ValueError(
                                     f"All the _btn parameters must be a gr.Button, string, or None, not {type(btn)}"
@@ -204,6 +229,7 @@ class ChatInterface(Blocks):
                         label="Response", visible=False
                     )
                     (
+                        self.upload_btn,
                         self.submit_btn,
                         self.stop_btn,
                         self.retry_btn,
@@ -263,12 +289,18 @@ class ChatInterface(Blocks):
             .then(
                 submit_fn,
                 [self.saved_input, self.chatbot_state] + self.additional_inputs,
-                [self.chatbot, self.chatbot_state],
+                [self.chatbot, self.chatbot_state] + self.additional_outputs,
                 api_name=False,
             )
         )
         self._setup_stop_events(self.textbox.submit, submit_event)
 
+        if self.upload_btn:
+            self.upload_btn.upload(
+                self._upload_fn, 
+                [self.textbox, self.upload_btn], 
+                [self.textbox], queue=False, api_name='upload')
+            
         if self.submit_btn:
             click_event = (
                 self.submit_btn.click(
@@ -288,7 +320,7 @@ class ChatInterface(Blocks):
                 .then(
                     submit_fn,
                     [self.saved_input, self.chatbot_state] + self.additional_inputs,
-                    [self.chatbot, self.chatbot_state],
+                    [self.chatbot, self.chatbot_state] + self.additional_outputs,
                     api_name=False,
                 )
             )
@@ -313,7 +345,7 @@ class ChatInterface(Blocks):
                 .then(
                     submit_fn,
                     [self.saved_input, self.chatbot_state] + self.additional_inputs,
-                    [self.chatbot, self.chatbot_state],
+                    [self.chatbot, self.chatbot_state] + self.additional_outputs,
                     api_name=False,
                 )
             )
@@ -404,6 +436,21 @@ class ChatInterface(Blocks):
         history.append([message, None])
         return history, history
 
+    def __additional_outputs_return(self, message, history, response, mode='submit'):
+        
+        response, additional = (response[0], response[1:]) if len(self.additional_outputs) > 0 else (response, tuple())
+
+        if mode in ['submit', 'api_submit']:
+            history.append([message, response])
+            return (history, history) + additional
+        elif mode == 'stream':
+            update = history + [[message, response]]
+            return (update, update) + additional
+        elif mode == 'api_stream':
+            return (response, history + [[message, response]]) + additional
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
+    
     async def _submit_fn(
         self,
         message: str,
@@ -417,8 +464,9 @@ class ChatInterface(Blocks):
             response = await anyio.to_thread.run_sync(
                 self.fn, message, history, *args, limiter=self.limiter
             )
-        history.append([message, response])
-        return history, history
+        return self.__additional_outputs_return(message, history, response, mode='submit')
+        # history.append([message, response])
+        # return history, history
 
     async def _stream_fn(
         self,
@@ -436,14 +484,17 @@ class ChatInterface(Blocks):
             generator = SyncToAsyncIterator(generator, self.limiter)
         try:
             first_response = await async_iteration(generator)
-            update = history + [[message, first_response]]
-            yield update, update
+            yield self.__additional_outputs_return(message, history, first_response, mode='stream')
+            # update = history + [[message, first_response]]
+            # yield update, update
         except StopIteration:
-            update = history + [[message, None]]
-            yield update, update
+            yield self.__additional_outputs_return(message, history, None, mode='stream')
+            # update = history + [[message, None]]
+            # yield update, update
         async for response in generator:
-            update = history + [[message, response]]
-            yield update, update
+            yield self.__additional_outputs_return(message, history, response, mode='stream')
+            # update = history + [[message, response]]
+            # yield update, update
 
     async def _api_submit_fn(
         self, message: str, history: list[list[str | None]], *args
@@ -454,8 +505,9 @@ class ChatInterface(Blocks):
             response = await anyio.to_thread.run_sync(
                 self.fn, message, history, *args, limiter=self.limiter
             )
-        history.append([message, response])
-        return response, history
+        return self.__additional_outputs_return(message, history, response, mode='api_submit')
+        # history.append([message, response])
+        # return response, history
 
     async def _api_stream_fn(
         self, message: str, history: list[list[str | None]], *args
@@ -469,11 +521,14 @@ class ChatInterface(Blocks):
             generator = SyncToAsyncIterator(generator, self.limiter)
         try:
             first_response = await async_iteration(generator)
-            yield first_response, history + [[message, first_response]]
+            yield self.__additional_outputs_return(message, history, first_response, mode='api_stream')
+            # yield first_response, history + [[message, first_response]]
         except StopIteration:
-            yield None, history + [[message, None]]
+            yield self.__additional_outputs_return(message, history, None, mode='api_stream')
+            # yield None, history + [[message, None]]
         async for response in generator:
-            yield response, history + [[message, response]]
+            yield self.__additional_outputs_return(message, history, response, mode='api_stream')
+            # yield response, history + [[message, response]]
 
     async def _examples_fn(self, message: str, *args) -> list[list[str | None]]:
         if self.is_async:
@@ -507,3 +562,19 @@ class ChatInterface(Blocks):
         except IndexError:
             message = ""
         return history, message or "", history
+    
+    def _upload_fn(self, msg, filepath_or_filename):
+        if filepath_or_filename is None:
+            return msg
+        filename = filepath_or_filename.name if hasattr(filepath_or_filename, 'name') else filepath_or_filename
+        import os, mimetypes
+        mtype = mimetypes.guess_type(filename)[0]
+        if mtype.startswith('image'):
+            msg += f'<img src="\\file={filename}" alt="{os.path.basename(filename)}"/>'
+        elif mtype.startswith('audio'):
+            msg += f'<audio controls><source src="\\file={filename}">{os.path.basename(filename)}</audio>'
+        elif mtype.startswith('video'):
+            msg += f'<video controls><source src="\\file={filename}">{os.path.basename(filename)}</video>'
+        else:
+            msg += f'<a href="\\file={filename}">📁 {os.path.basename(filename)}</a>'
+        return msg
