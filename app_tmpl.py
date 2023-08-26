@@ -35,13 +35,13 @@ Markdown description here. Features:
 
 ATTACHMENTS = {
     'image': dict(cls='Image', type='filepath'), #, source='webcam'),
+    'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
 }
 
 SETTINGS = {
     'session_state': dict(cls='State', value={}),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'openai', 'openai_stream'], value='auto', 
             interactive=True, label="Chat engine"),
-    'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
 }
 
 PARAMETERS = {
@@ -156,8 +156,8 @@ min-height: 600px;
                         inputs=chatbot.textbox, label="AI Chat Examples",
                     )
             # additional handlers
-            if hasattr(chatbot, '_upload_fn'):
-                for name, attach in attachments.items():
+            for name, attach in attachments.items():
+                if hasattr(chatbot, '_upload_fn') and hasattr(attach, 'change'):
                     attach.change(chatbot._upload_fn,
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
