@@ -157,7 +157,7 @@ min-height: 600px;
                     )
             # additional handlers
             for name, attach in attachments.items():
-                if hasattr(chatbot, '_upload_fn') and hasattr(attach, 'change'):
+                if hasattr(chatbot, '_upload_fn') and isinstance(attach, gr.Image):
                     attach.change(chatbot._upload_fn,
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
