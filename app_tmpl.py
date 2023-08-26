@@ -36,6 +36,7 @@ Markdown description here. Features:
 ATTACHMENTS = {
     'image': dict(cls='Image', type='filepath'), #, source='webcam'),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
+    'status': dict(cls='JSON', label='Status'),
 }
 
 SETTINGS = {
@@ -93,11 +94,13 @@ def _bot_fn_session_state(message, history, *args):
         'openai_stream': _openai_stream_bot_fn,
         }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
+    session_state['message'] = message
+    
     if isinstance(bot_message, str):
-        yield bot_message, session_state
+        yield bot_message, session_state, session_state
     else:
         for m in bot_message:
-            yield m, session_state
+            yield m, session_state, session_state
 
     print(kwargs)
     pprint(history + [[message, bot_message]])
@@ -142,7 +145,7 @@ min-height: 600px;
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
-                        additional_outputs=[KWARGS['session_state']] if 'session_state' in KWARGS else None,
+                        additional_outputs=[KWARGS['session_state'], KWARGS['status']] if 'session_state' in KWARGS else None,
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
 
