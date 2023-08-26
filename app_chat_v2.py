@@ -238,24 +238,31 @@ def _hf_stream_bot_fn(message, history, _settings, _parameters):
             user_name=user_name, bot_name=bot_name, format=_format)
     return bot_message
 
+def _llm_call(message, history, _settings, _parameters):
+    if _settings['chat_engine'] in HF_ENDPOINTS:
+        bot_message = _hf_stream_bot_fn(message, history, _settings, _parameters)
+    else:
+        bot_message = {'random': _random_bot_fn,
+            'gpt-3.5-turbo-16k': _openai_stream_bot_fn,
+            'gpt-4': _openai_stream_bot_fn,
+            }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
+    return bot_message
+
+def _bot_slash_fn(message, history, _settings, _parameters):
+    bot_message = message
+    return bot_message
+
 def bot_fn(message, history, *args):
-    yield "" # Not crash if empty user input
 
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
 
     _settings['chat_engine'] = 'gpt-3.5-turbo-16k' if _settings['chat_engine'] == 'auto' else _settings['chat_engine']
 
-    if _settings['chat_engine'] in HF_ENDPOINTS:
-        bot_message = _hf_stream_bot_fn(message, history, _settings, _parameters)
+    if message.startswith('/'):
+        bot_message = _bot_slash_fn(message, history, _settings, _parameters)
     else:
-        bot_message = {'random': _random_bot_fn,
-            # 'gpt-3.5-turbo': _openai_stream_bot_fn,
-            'gpt-3.5-turbo-16k': _openai_stream_bot_fn,
-            'gpt-4': _openai_stream_bot_fn,
-            # 'gpt2': _hf_gpt2_bot_fn,
-            # 'falcon-7b-instruct': _hf_stream_bot_fn,
-            }.get(_settings['chat_engine'])(message, history, _settings, _parameters)
+        bot_message = _llm_call(message, history, _settings, _parameters)
     
     if isinstance(bot_message, str):
         for i in range(len(bot_message)):
