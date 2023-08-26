@@ -35,13 +35,13 @@ Markdown description here. Features:
 """
 
 ATTACHMENTS = {
+    'session_state': dict(cls='State', value={}),
     'image': dict(cls='Image', type='filepath'), #, source='webcam'),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
     'status': dict(cls='JSON', label='Status info'),
 }
 
 SETTINGS = {
-    'session_state': dict(cls='State', value={}),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
 }
@@ -93,7 +93,6 @@ def _bot_fn(message, history, *args):
     print(kwargs)
     pprint(history + [[message, bot_message]])
 
-
 def _bot_fn_session_state(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
@@ -123,7 +122,7 @@ def _bot_fn_session_state(message, history, *args):
     pprint(history + [[message, bot_message]])
     session_state['previous_message'] = message
 
-bot_fn = _bot_fn_session_state if 'session_state' in SETTINGS else _bot_fn
+bot_fn = _bot_fn_session_state if 'session_state' in {**ATTACHMENTS, **SETTINGS, **PARAMETERS} else _bot_fn
 
 ################################################################
 # Gradio app
@@ -207,4 +206,4 @@ if __name__ == '__main__':
     demo = get_demo()
     from utils import reload_javascript
     reload_javascript()
-    demo.queue().launch(share=True, server_port=args.port)
+    demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
