@@ -68,7 +68,7 @@ def _create_from_dict(PARAMS):
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
-from app_chat_bot_fn import _bot_slash_fn, _llm_call
+from app_chat_bot_fn import _bot_slash_fn, _llm_call, _llm_call_langchain
 
 def bot_fn(message, history, *args):
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
@@ -77,7 +77,8 @@ def bot_fn(message, history, *args):
     if message.startswith('/'):
         bot_message = _bot_slash_fn(message, history, **kwargs)
     else:
-        bot_message = _llm_call(message, history, **kwargs)
+        # bot_message = _llm_call(message, history, **kwargs)
+        bot_message = _llm_call_langchain(message, history, **kwargs)
     
     if isinstance(bot_message, str):
         yield bot_message

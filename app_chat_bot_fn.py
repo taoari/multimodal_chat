@@ -5,6 +5,7 @@ from pprint import pprint
 from dotenv import load_dotenv
 import os
 import json, requests
+from langchain.chat_models import ChatOpenAI
 
 from utils import parse_message, format_to_message
 
@@ -189,13 +190,16 @@ def _hf_stream_bot_fn(message, history, **kwargs):
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else system
     prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
 
+    stop_word = f'\n{user_name}'
     bot_message = ""
     for response in client.generate_stream(prompt, **_kwargs):
         if not response.token.special:
             bot_message += response.token.text
-            yield bot_message.strip().split(f'\n{user_name}')[0] # stop word
+            yield bot_message.strip().split(stop_word)[0] # stop word
+            if stop_word in bot_message:
+                break
 
-    bot_message = bot_message.strip().split(f'\n{user_name}')[0]
+    bot_message = bot_message.strip().split(stop_word)[0]
     _print_messages(history, message, bot_message, system=system, 
             user_name=user_name, bot_name=bot_name, format=_format)
     # bot_message = client.generate(prompt, **_kwargs).generated_text.strip().split(f'\n{user_name}')[0]
@@ -216,4 +220,62 @@ def _llm_call(message, history, **kwargs):
         bot_message = _hf_stream_bot_fn(message, history, **kwargs)
     else:
         bot_message = f'ERROR: Invalid chat_engine: {chat_engine}'
+    return bot_message
+
+def _get_llm(chat_engine='gpt-3.5-turbo', **kwargs):
+    system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
+    # chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+
+    if chat_engine.startswith('gpt'):
+        _kwargs = dict(temperature=kwargs.get('temperature', 0)) # ignore max_tokens
+        from langchain.chat_models import ChatOpenAI
+        llm = ChatOpenAI(model=kwargs.get('chat_engine', 'gpt-3.5-turbo'), **_kwargs)
+        return llm
+    elif chat_engine in HF_ENDPOINTS:
+        _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
+                    max_new_tokens=kwargs.get('max_tokens', 512))
+        from langchain.llms import HuggingFaceTextGenInference
+        llm = HuggingFaceTextGenInference(
+            inference_server_url=HF_ENDPOINTS[chat_engine],
+            stop_sequences=[f'\nUser', f'\nHuman'], # for falcon and langchain
+            **_kwargs,
+        )
+        return llm
+    else:
+        raise ValueError(f"Invalid chat engine: {chat_engine}")
+
+def _llm_call_langchain(message, history, **kwargs):
+    system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    llm = _get_llm(**kwargs)
+
+    if chat_engine.startswith('gpt'):
+        # _kwargs = dict(temperature=kwargs.get('temperature', 0)) # ignore max_tokens
+        # from langchain.chat_models import ChatOpenAI
+        # llm = ChatOpenAI(model=kwargs.get('chat_engine', 'gpt-3.5-turbo'), **_kwargs)
+        bot_message = llm(_format_messages(history, message, system=system, format='langchain_chat')).content
+    elif chat_engine in HF_ENDPOINTS:
+        # _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
+        #             max_new_tokens=kwargs.get('max_tokens', 512))
+        if chat_engine.startswith('falcon'):
+            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
+        elif chat_engine.startswith('mpt'):
+            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
+        elif chat_engine.lower().startswith('llama'):
+            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama'
+        else:
+            system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS, 'Human', 'AI', 'plain'
+        
+        system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else system
+        prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
+        # from langchain.llms import HuggingFaceTextGenInference
+        # llm = HuggingFaceTextGenInference(
+        #     inference_server_url=HF_ENDPOINTS[chat_engine],
+        #     stop_sequences=[f'\n{user_name}'],
+        #     **_kwargs,
+        # )
+        bot_message = llm(prompt)
+    else:
+        bot_message = f'ERROR: Invalid chat_engine: {chat_engine}'
+    _print_messages(history, message, bot_message, system=system)
     return bot_message
