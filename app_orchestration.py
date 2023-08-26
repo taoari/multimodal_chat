@@ -55,6 +55,10 @@ SETTINGS = {
 }
 
 PARAMETERS = {
+    'max_pages': dict(cls='Slider', minimum=0, maximum=16, value=8, step=1, 
+            interactive=True, label="Max pages", info="Max pages to be processed for vector store (0 for all)."),
+    'query_k': dict(cls='Slider', minimum=1, maximum=10, value=3, step=1, 
+            interactive=True, label="Query k"),
 }
     
 KWARGS = {} # use for chatbot additional_inputs, do NOT change
@@ -74,7 +78,8 @@ def _create_from_dict(PARAMS):
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
-def _build_vs(fname, chunk_size=0, persist_directory=None, verbose=False):
+def _build_vs(fname, chunk_size=0, persist_directory=None, 
+            max_pages=0, verbose=False):
     from langchain.document_loaders import PyPDFLoader
     loader = PyPDFLoader(fname)
     pages = loader.load()
@@ -93,6 +98,10 @@ def _build_vs(fname, chunk_size=0, persist_directory=None, verbose=False):
         docs = pages
 
     print(f'len(docs) = {len(docs)}')
+
+    if max_pages > 0:
+        docs = docs[:max_pages]
+        print(f'len(docs) for vs = {len(docs)}')
 
     from langchain.embeddings import HuggingFaceEmbeddings
     embedding = HuggingFaceEmbeddings()
@@ -185,14 +194,14 @@ def bot_fn(message, history, *args):
         session_state['current_file'] = msg_dict['files'][-1]
         yield get_spinner() + f"Building vector store for **{os.path.basename(session_state['current_file'])}**, please be patient.", session_state, session_state
         if session_state['current_file'].endswith('.pdf'):
-            vs = _build_vs(session_state['current_file'])
+            vs = _build_vs(session_state['current_file'], max_pages=kwargs.get('max_pages', 0))
             SESSION_STATE['current_vs'] = vs
 
     if _is_document_qa(session_state):
         # Document QA if a PDF file is uploaded
         if  msg_dict['text']:
             vectordb = SESSION_STATE['current_vs']
-            res = vectordb.similarity_search(msg_dict['text'])
+            res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
             context = '\n\n'.join([doc.page_content for doc in res])
             _kwargs = {'system_prompt': context, **kwargs}
             bot_message = _llm_call_stream(message, history, **_kwargs)
@@ -255,7 +264,7 @@ min-height: 600px;
                 attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=True) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
-                with gr.Accordion("Parameters", open=False) as parameters_accordin:
+                with gr.Accordion("Parameters", open=True) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
 
             with gr.Column(scale=9):
