@@ -23,7 +23,18 @@ TITLE = "Multimodal Chatbot Template"
 
 DESCRIPTION = """
 Markdown description here.
+
+* Upload button (auto displayed)
+* Session state (additional outputs)
+* Chatbot messages:
+  * Avatar images (auto displayed)
+  * Buttons (type in "button")
+  * Cards (type in "card")
 """
+
+ATTACHMENTS = {
+    'image': dict(cls='Image', type='filepath'), #, source='webcam'),
+}
 
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'openai'], value='auto', 
@@ -128,21 +139,25 @@ def get_demo():
 min-height: 600px;
 }"""
 
+    # NOTE: can not be inside another gr.Blocks
+    # _chatbot = gr.Chatbot(elem_id="chatbot", avatar_images = ("user.png", "bot.png"))
+    # _textbox = gr.Textbox(container=False, show_label=False, placeholder="Type a message...", scale=10, elem_id='inputTextBox', min_width=300)
+
     with gr.Blocks(css=css) as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
             with gr.Column(scale=1):
-                # attachments = _create_from_dict(ATTACHMENTS)
+                attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
 
             with gr.Column(scale=9):
-                # import chat_interface
-                chatbot = gr.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
+                import chat_interface
+                chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(settings.values()) + list(parameters.values()),
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
@@ -155,6 +170,12 @@ min-height: 600px;
                         ],
                         inputs=chatbot.textbox, label="AI Chat Examples",
                     )
+
+            if hasattr(chatbot, '_upload_fn'):
+                for name, attach in attachments.items():
+                    attach.change(chatbot._upload_fn,
+                        [chatbot.textbox, attach], 
+                        [chatbot.textbox], queue=False, api_name=False)
     return demo
 
 def parse_args():
