@@ -110,7 +110,7 @@ def _openai_bot_stream_fn(message, history, _settings, _parameters):
             bot_message += _resp.choices[0].delta.content # need to accumulate previous message
         yield bot_message.strip() # accumulated message can easily be postprocessed
 
-def bot_fn(message, history, *args):
+def bot_fn(message, history, session_state, *args):
 
     _settings = {name: value for name, value in zip(SETTINGS.keys(), args[:len(SETTINGS)])}
     _parameters = {name: value for name, value in zip(PARAMETERS.keys(), args[len(SETTINGS):])}
@@ -123,13 +123,14 @@ def bot_fn(message, history, *args):
     
     if isinstance(bot_message, str):
         for i in range(len(bot_message)):
-            yield bot_message[:i+1]
+            yield bot_message[:i+1], session_state
     else:
         for m in bot_message:
-            yield m
+            yield m, session_state
 
-    print(_settings); print(_parameters)
+    print(_settings); print(_parameters); print(session_state)
     pprint(history + [[message, bot_message]])
+    session_state['previous_message'] = message
 
 
 def get_demo():
@@ -145,6 +146,7 @@ min-height: 600px;
 
     with gr.Blocks(css=css) as demo:
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
+        SESSION_STATE = gr.State({}) # need to be inside Blocks
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
@@ -158,7 +160,8 @@ min-height: 600px;
             with gr.Column(scale=9):
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
-                        additional_inputs=list(settings.values()) + list(parameters.values()),
+                        additional_inputs=[SESSION_STATE] + list(settings.values()) + list(parameters.values()),
+                        additional_outputs=[SESSION_STATE],
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
 
