@@ -37,12 +37,12 @@ Markdown description here. Features:
 ATTACHMENTS = {
     'image': dict(cls='Image', type='filepath'), #, source='webcam'),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
-    'status': dict(cls='JSON', label='Status'),
+    'status': dict(cls='JSON', label='Status info'),
 }
 
 SETTINGS = {
     'session_state': dict(cls='State', value={}),
-    'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'openai', 'openai_stream'], value='auto', 
+    'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
 }
 
@@ -62,18 +62,24 @@ def _create_from_dict(PARAMS):
         params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
+################################################################
+# Bot fn
+################################################################
 
-from app_tmpl_bot_fn import _random_bot_fn, _openai_bot_fn, _openai_stream_bot_fn
+from llms import _random_bot_fn, _openai_stream_bot_fn
+
+def _echo_bot_fn(message, history, **kwargs):
+    return message
 
 def _bot_fn(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
 
-    kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
+    kwargs['chat_engine'] = 'random' if 'chat_engine' not in kwargs or kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     bot_message = {'random': _random_bot_fn,
-        'openai': _openai_bot_fn,
-        'openai_stream': _openai_stream_bot_fn,
+        'echo': _echo_bot_fn,
+        'gpt-3.5-turbo': _openai_stream_bot_fn,
         }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     if isinstance(bot_message, str):
@@ -96,8 +102,8 @@ def _bot_fn_session_state(message, history, *args):
     kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     bot_message = {'random': _random_bot_fn,
-        'openai': _openai_bot_fn,
-        'openai_stream': _openai_stream_bot_fn,
+        'echo': _echo_bot_fn,
+        'gpt-3.5-turbo': _openai_stream_bot_fn,
         }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     session_state['message'] = message
@@ -171,7 +177,7 @@ min-height: 600px;
                     )
             # additional handlers
             for name, attach in attachments.items():
-                if hasattr(chatbot, '_upload_fn') and isinstance(attach, gr.Image):
+                if hasattr(chatbot, '_upload_fn') and isinstance(attach, (gr.Image, gr.Audio, gr.Video, gr.File)):
                     attach.change(chatbot._upload_fn,
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
