@@ -55,11 +55,15 @@ KWARGS = {} # use for chatbot additional_inputs, do NOT change
 # utils
 ################################################################
 
-def _create_from_dict(PARAMS):
+def _create_from_dict(PARAMS, tabbed=False):
     params = {}
     for name, kwargs in PARAMS.items():
         cls_ = kwargs['cls']; del kwargs['cls']
-        params[name] = getattr(gr, cls_)(**kwargs)
+        if not tabbed:
+            params[name] = getattr(gr, cls_)(**kwargs)
+        else:
+            with gr.Tab(name):
+                params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
 ################################################################
@@ -146,7 +150,7 @@ min-height: 600px;
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
-            # attachements, settings, and parameters
+            # attachments, settings, and parameters
             with gr.Column(scale=1):
                 attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=False) as settings_accordin:
@@ -158,7 +162,7 @@ min-height: 600px;
                 # chatbot
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
-                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML))}
+                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),

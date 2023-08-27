@@ -390,7 +390,7 @@ min-height: 600px;
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
-            # attachements, settings, and parameters
+            # attachments, settings, and parameters
             with gr.Column(scale=1):
                 attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=True) as settings_accordin:
@@ -402,11 +402,11 @@ min-height: 600px;
                 # chatbot
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
-                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML))}
+                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
-                        additional_outputs=[KWARGS['session_state'], KWARGS['status']] if 'session_state' in KWARGS else None,
+                        additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
                         upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
