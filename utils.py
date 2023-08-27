@@ -81,56 +81,74 @@ COLLAPSE_TEMPLATE = """
 {text}
 </details>"""
 
-def format_to_message(res):
-    msg = res["text"] if "text" in res else ""
-    if "images" in res:
-        for filepath in res["images"]:
-            filepath = _prefix_local_file(filepath)
-            msg += f'<img src="{filepath}" alt="{os.path.basename(filepath)}"/>'
-    if "audios" in res:
-        for filepath in res["audios"]:
-            filepath = _prefix_local_file(filepath)
-            msg += f'<audio controls><source src="{filepath}">{os.path.basename(filepath)}</audio>'
-    if "videos" in res:
-        for filepath in res["videos"]:
-            filepath = _prefix_local_file(filepath)
-            msg += f'<video controls><source src="{filepath}">{os.path.basename(filepath)}</video>'
-    if "files" in res:
-        for filepath in res["files"]:
-            filepath = _prefix_local_file(filepath)
-            msg += f'<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
-    if "buttons" in res:
-        msg += '<br />'
-        for btn in res["buttons"]:
-            # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
-            btn = dict(text=btn, value=btn) if isinstance(btn, str) else btn
-            if "value" in btn:
-                msg += f""" <a class="btn btn-primary btn-chatbot text-white" value="{btn['value']}">{btn['text']}</a>"""
-            else:
-                msg += f""" <a class="btn btn-primary btn-chatbot-href text-white" href="{btn['href']}">{btn['text']}</a>"""
+def format_to_message(res, _format='html'):
+    if _format == 'html':
+        msg = res["text"] if "text" in res else ""
+        if "images" in res:
+            for filepath in res["images"]:
+                filepath = _prefix_local_file(filepath)
+                msg += f'<img src="{filepath}" alt="{os.path.basename(filepath)}"/>'
+        if "audios" in res:
+            for filepath in res["audios"]:
+                filepath = _prefix_local_file(filepath)
+                msg += f'<audio controls><source src="{filepath}">{os.path.basename(filepath)}</audio>'
+        if "videos" in res:
+            for filepath in res["videos"]:
+                filepath = _prefix_local_file(filepath)
+                msg += f'<video controls><source src="{filepath}">{os.path.basename(filepath)}</video>'
+        if "files" in res:
+            for filepath in res["files"]:
+                filepath = _prefix_local_file(filepath)
+                msg += f'<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
+        if "buttons" in res:
+            msg += '<br />'
+            for btn in res["buttons"]:
+                # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
+                btn = dict(text=btn, value=btn) if isinstance(btn, str) else btn
+                if "value" in btn:
+                    msg += f""" <a class="btn btn-primary btn-chatbot text-white" value="{btn['value']}">{btn['text']}</a>"""
+                else:
+                    msg += f""" <a class="btn btn-primary btn-chatbot-href text-white" href="{btn['href']}">{btn['text']}</a>"""
 
-    if "cards" in res:
-        cards_msg = ""
-        for card in res["cards"]:
-            _card = {}
-            for key in ['image', 'title', 'text', 'extra']:
-                _card[key] = card[key] if key in card else ""
-            if "buttons" in card:
-                _card["extra"] += format_to_message(dict(buttons=card["buttons"]))
-            cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **_card)
-        msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
-    if "collapses" in res:
-        import uuid
-        collapses_msg_pre = ""
-        for collapse in res["collapses"]:
-            before = 'before' in collapse and collapse['before']
-            _collapse = COLLAPSE_TEMPLATE.format(id=str(uuid.uuid4()) + ("-before" if before else ""), 
-                    title=collapse['title'], text=collapse['text'])
-            if before:
-                collapses_msg_pre += _collapse
-            else:
-                msg += _collapse
-        msg = collapses_msg_pre + msg # collapses are usually are the front
+        if "cards" in res:
+            cards_msg = ""
+            for card in res["cards"]:
+                _card = {}
+                for key in ['image', 'title', 'text', 'extra']:
+                    _card[key] = card[key] if key in card else ""
+                if "buttons" in card:
+                    _card["extra"] += format_to_message(dict(buttons=card["buttons"]))
+                cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **_card)
+            msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
+        if "collapses" in res:
+            import uuid
+            collapses_msg_pre = ""
+            for collapse in res["collapses"]:
+                before = 'before' in collapse and collapse['before']
+                _collapse = COLLAPSE_TEMPLATE.format(id=str(uuid.uuid4()) + ("-before" if before else ""), 
+                        title=collapse['title'], text=collapse['text'])
+                if before:
+                    collapses_msg_pre += _collapse
+                else:
+                    msg += _collapse
+            msg = collapses_msg_pre + msg # collapses are usually are the front
+
+    elif _format == 'plain':
+        msg = res["text"] if "text" in res else ""
+
+        files = []
+        for key in ['images', 'audios', 'videos', 'files']:
+            if key in res:
+                files.extend(res[key])
+        cards = []
+        if 'cards' in res:
+            for card in res['cards']:
+                cards.append(f"**{card['title']}**:\n\t{card['text']}")
+
+        msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)])
+        # ignore buttons and collapses
+    else:
+        raise ValueError(f"Invalid format: {_format}")
 
     return msg
 

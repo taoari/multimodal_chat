@@ -44,6 +44,8 @@ ATTACHMENTS = {
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
+    '_format': dict(cls='Radio', choices=['html', 'plain'], value='html', 
+            interactive=True, label="Bot response format"),
 }
 
 PARAMETERS = {
