@@ -420,6 +420,18 @@ min-height: 600px;
                         ],
                         inputs=chatbot.textbox, label="AI Chat Examples",
                     )
+                    qa_examples = gr.Examples(
+                        ['<a href="\\file=test_files/flash_attention_v2.pdf">📁 flash_attention_v2.pdf</a>',
+                         'Summarize the text.',
+                         'Why flash attention v2 is better than v1?'],
+                        inputs=chatbot.textbox, label="Documment QA Examples",
+                    )
+                    image_examples = gr.Examples(
+                        ['<img src="\\file=test_files/JohnSmith-Example.jpg" alt="JohnSmith-Example.jpg"/>',
+                         'What is the patient name?',
+                         'What is the prescription?'],
+                        inputs=chatbot.textbox, label="Image OCR Examples",
+                    )
             # additional handlers
             for name, attach in attachments.items():
                 if hasattr(chatbot, '_upload_fn') and isinstance(attach, (gr.Image, gr.Audio, gr.Video, gr.File)):
