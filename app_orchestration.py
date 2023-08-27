@@ -142,6 +142,11 @@ def _load_vs(persist_directory):
 # Bot fn
 ################################################################
 
+PROMPT_TEMPLATE_QA = """Use the following pieces of context to answer the question at the end.
+{context}
+Question: {question}
+Answer: """
+
 def _langchain_agent_bot_fn(message, history, **kwargs):
     session_state = kwargs['session_state']
 
@@ -240,9 +245,11 @@ def bot_fn(message, history, *args):
             if  msg_dict['text']:
                 vectordb = SESSION_STATE['current_vs']
                 res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
-                context = '\n\n'.join(["Context:"] + [doc.page_content for doc in res])
-                _kwargs = {'system_prompt': context, **kwargs}
-                bot_message = _llm_call_stream(message, history, **_kwargs)
+                context = '\n\n'.join([doc.page_content for doc in res])
+                prompt = PROMPT_TEMPLATE_QA.format(context=context, question=msg_dict['text'])
+                bot_message = _llm_call_stream(prompt, [], **kwargs) # NOTE: QA does not need history 
+                # _kwargs = {'system_prompt': context, **kwargs}
+                # bot_message = _llm_call_stream(message, history, **_kwargs)
                 session_state['context'] = context
             else:
                 bot_message = format_to_message(dict(
