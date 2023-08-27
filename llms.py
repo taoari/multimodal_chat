@@ -127,40 +127,37 @@ def _random_bot_fn(message, history, **kwargs):
     from utils import get_spinner
 
     # Example multimodal messages
-    samples = dict(
-        image=format_to_message(dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])),
-        image2=format_to_message(dict(text="I hate cat", images=["https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Felis_catus-cat_on_snow.jpg/2560px-Felis_catus-cat_on_snow.jpg"])),
-        audio=format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
-        video=format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
-        pdf=format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
-        button=format_to_message(dict(text="Hello, how can I assist you today?", 
-                buttons=['Primary', dict(text='Secondary', value="the second choice"), dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])),
-        card=format_to_message(dict(text="We found the following items:", cards=[
-            dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", title="Siam Lilac Point", 
-                 text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads, with silver-gray fur surrounding those points."),
-            dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", 
-                 title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads, with silver-gray fur surrounding those points.",
-                 buttons=[dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"),
-                          dict(text="Search", value="/search")])])),
-        spinner=get_spinner() + " Please be patient",
-        collapse_before=format_to_message(dict(text="Final results goes here", collapses=[dict(
-                title="Show progress", text="Scratch pad goes here", before=True)])),
-        collapse=format_to_message(dict(text="Final results goes here", collapses=[dict(
-                title="Show progress", text="Scratch pad goes here")])),
-    )
-    if 'pdf' in message:
-        bot_message = samples['pdf']
-    elif 'button' in message or 'btn' in message:
-        bot_message = samples['button']
-    elif 'card' in message:
-        bot_message = samples['card']
-    elif 'spin' in message:
-        bot_message = samples['spinner']
-    elif 'collapse' in message or 'detail' in message or 'accordin' in message:
-        bot_message = samples['collapse_before'] if 'before' in message else samples['collapse']
-    else:
-        bot_message = random.choice(list(samples.values()))
-    return bot_message
+    samples = {}
+    target = dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])
+    samples['image'] = format_to_message(target)
+    target = dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])
+    samples['audio'] = format_to_message(target)
+    target = dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])
+    samples['video'] = format_to_message(target)
+    target = dict(files=["https://www.africau.edu/images/default/sample.pdf"])
+    samples['pdf'] = format_to_message(target)
+    target = dict(text="Hello, how can I assist you today?", 
+            buttons=['Primary', dict(text='Secondary', value="the second choice"), 
+                    dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])
+    samples['button'] = format_to_message(target)
+    target = dict(text="We found the following items:", cards=[
+        dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", title="Siam Lilac Point", 
+                text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.", buttons=[]),
+        dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", 
+                title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.",
+                buttons=[dict(text="Search", value="/search"),
+                         dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])])
+    samples['card'] = format_to_message(target)
+    _message = get_spinner() + " Please be patient"
+    samples['spinner'] = _message
+    target = dict(text="Final results goes here", collapses=[dict(
+            title="Show progress", text="Scratch pad goes here", before=True)])
+    samples['collapse_before'] = format_to_message(target)
+    target = dict(text="Final results goes here", collapses=[dict(
+            title="Show progress", text="Scratch pad goes here", before=False)])
+    samples['collapse'] = format_to_message(target)
+
+    return samples[message] if message in samples else random.choice(list(samples.values()))
 
 def _openai_bot_fn(message, history, **kwargs):
     _kwargs = dict(temperature=kwargs.get('temperature', 0))
