@@ -41,7 +41,7 @@ CARD_TEMPLATE = """
     <div class="card-body text-primary">
       <h5 class="card-title">**{title}**</h5>
       <p class="card-text">{text}</p>
-      {extra}
+      <div>{extra}</div>
     </div>
   </div>
 """
@@ -107,7 +107,7 @@ def format_to_message(res):
             if "value" in btn:
                 msg += f""" <a class="btn btn-primary btn-chatbot text-white" value="{btn['value']}">{btn['text']}</a>"""
             else:
-                msg += f""" <a class="btn btn-primary text-white" href="{btn['href']}">{btn['text']}</a>"""
+                msg += f""" <a class="btn btn-primary btn-chatbot-href text-white" href="{btn['href']}">{btn['text']}</a>"""
 
     if "cards" in res:
         cards_msg = ""
@@ -150,12 +150,18 @@ def _parse_and_delete(soup):
         card = dict(image=_trim_local_file(elem.img.get("src")),
                     title=elem.div.h5.text.lstrip("**").rstrip("**"),
                     text=elem.div.p.text)
+        buttons = _parse_and_delete(elem.div.div)
+        card['buttons'] = buttons['buttons']
         res['cards'].append(card)
         elem.extract()
     # buttons
     for elem in soup.find_all('a', class_='btn-chatbot'):
         btn = dict(text=elem.text.strip(), value=elem.get("value"))
         btn = btn["text"] if btn["text"] == btn["value"] else btn
+        res['buttons'].append(btn)
+        elem.extract()
+    for elem in soup.find_all('a', class_='btn-chatbot-href'):
+        btn = dict(text=elem.text.strip(), href=elem.get("href"))
         res['buttons'].append(btn)
         elem.extract()
     return res
@@ -175,7 +181,54 @@ def parse_message(message):
         for unwanted in soup.select(tag):
             unwanted.extract()
     res["text"] = soup.text.strip()
+    res = {k: v for k, v in res.items() if v}
     return res
+
+def test_parse_message_image():
+    target = dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])
+    assert target == parse_message(format_to_message(target))
+
+def test_parse_message_audio():
+    target = dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])
+    assert target == parse_message(format_to_message(target))
+
+def test_parse_message_video():
+    target = dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])
+    assert target == parse_message(format_to_message(target))
+
+def test_parse_message_file():
+    target = dict(files=["https://www.africau.edu/images/default/sample.pdf"])
+    assert target == parse_message(format_to_message(target))
+
+def test_parse_message_button():
+    target = dict(text="Hello, how can I assist you today?", 
+            buttons=['Primary', dict(text='Secondary', value="the second choice"), 
+                    dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])
+    assert target == parse_message(format_to_message(target))
+
+def test_parse_message_card():
+    # For test pass, buttons must be left if empty, order in value-type then href-type
+    target = dict(text="We found the following items:", cards=[
+        dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", title="Siam Lilac Point", 
+                text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.", buttons=[]),
+        dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", 
+                title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.",
+                buttons=[dict(text="Search", value="/search"),
+                         dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])])
+    assert target == parse_message(format_to_message(target))
+
+def test_parse_message_spinner():
+    message = get_spinner() + " Please be patient"
+    target = dict(text="Please be patient")
+    assert target == parse_message(message)
+
+def test_parse_message_collapse():
+    target = dict(text="Final results goes here", collapses=[dict(
+            title="Show progress", text="Scratch pad goes here", before=True)])
+    assert target == parse_message(format_to_message(target))
+    target = dict(text="Final results goes here", collapses=[dict(
+            title="Show progress", text="Scratch pad goes here", before=False)])
+    assert target == parse_message(format_to_message(target))
 
 def get_spinner(variant='primary'):
     return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status"></div>"""
