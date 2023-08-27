@@ -59,10 +59,11 @@ SETTINGS = {
 }
 
 PARAMETERS = {
+    'qa_separator': dict(cls='Markdown', value="**Document QA parameters**"),
     'max_pages': dict(cls='Slider', minimum=0, maximum=16, value=8, step=1, 
-            interactive=True, label="Max pages", info="Max pages to be processed for vector store (0 for all)."),
-    'query_k': dict(cls='Slider', minimum=1, maximum=10, value=1, step=1, 
-            interactive=True, label="Query k"),
+            interactive=True, label="Max pages", info="Max pages to be processed (0 to process all)."),
+    'query_k': dict(cls='Slider', minimum=1, maximum=10, value=2, step=1, 
+            interactive=True, label="Query k", info="Increase for better QA results."),
 }
     
 KWARGS = {} # use for chatbot additional_inputs, do NOT change
@@ -291,7 +292,7 @@ def bot_fn(message, history, *args):
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
 
     session_state = kwargs['session_state']
-    kwargs['chat_engine'] = 'gpt-3.5-turbo-16k' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
+    kwargs['chat_engine'] = 'gpt-3.5-turbo-0613' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     if len(history) == 0 or message.startswith('/clear'):
         _clear(session_state)
@@ -348,8 +349,10 @@ def bot_fn(message, history, *args):
                 bot_message = _llm_call_stream(message, history, **kwargs)
     
     session_state['message'] = message
+    _parameters = {k: v for k,v in kwargs.items() if k not in {'session_state', 'status'}}
     status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys()),
-            'VS_KEYS': list(SESSION_STATE['vs'].keys())})
+            'VS_KEYS': list(SESSION_STATE['vs'].keys()),
+            **_parameters})
     
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
@@ -361,7 +364,7 @@ def bot_fn(message, history, *args):
 
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
-    print(kwargs)
+    # print({k: v for k,v in kwargs.items() if k not in {'session_state', 'status'}})
     # pprint(history + [[message, bot_message]])
     session_state['previous_message'] = message
 
@@ -399,6 +402,7 @@ min-height: 600px;
                 # chatbot
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
+                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML))}
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
