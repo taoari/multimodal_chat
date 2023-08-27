@@ -127,6 +127,76 @@ def _build_vs(fname, chunk_size=0, persist_directory=None,
 
     return vectordb
 
+
+def _get_hash(str_or_file, is_file=False):
+    import hashlib
+    if not is_file:
+        return hashlib.md5(str_or_file.encode('utf8')).hexdigest()
+    else:
+        with open(str_or_file, "rb") as f:
+            file_hash = hashlib.md5()
+            while chunk := f.read(8192):
+                file_hash.update(chunk)
+        return file_hash.hexdigest()
+
+
+def _build_vs_v2(fname, chunk_size=0, persist_directory=None, 
+            max_pages=0, verbose=False):
+    """Each file per collection and deduplicated."""
+
+    from langchain.document_loaders import PyPDFLoader
+    loader = PyPDFLoader(fname)
+    pages = loader.load()
+
+    print(f'len(pages) = {len(pages)}')
+
+    if chunk_size > 0:
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        r_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=0,
+            separators=["\n\n", "\n", "(?<=\. )", " ", ""]
+        )
+        docs = r_splitter.split_documents(pages)
+    else:
+        docs = pages
+
+    print(f'len(docs) = {len(docs)}')
+
+    if max_pages > 0:
+        docs = docs[:max_pages]
+        print(f'len(docs) for vs = {len(docs)}')
+
+    from langchain.embeddings import HuggingFaceEmbeddings
+    embedding = HuggingFaceEmbeddings()
+
+    from langchain.vectorstores import Chroma
+
+    collection_name = _get_hash(fname, is_file=True)
+    ids = [_get_hash(p.page_content) for p in docs]
+
+    vectordb = Chroma(
+        collection_name=collection_name,
+        embedding_function=embedding,
+        persist_directory=persist_directory
+    )
+    print(f"vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
+    existing_ids = set(vectordb.get()['ids'])
+    docs_dedup = {_id: doc for _id, doc in zip(ids, docs) if _id not in existing_ids}
+
+    if len(docs_dedup)  > 0:
+        vectordb = Chroma.from_documents(
+            documents=list(docs_dedup.values()),
+            ids=list(docs_dedup.keys()),
+            collection_name=collection_name,
+            embedding=embedding,
+            persist_directory=persist_directory
+        )
+    if persist_directory is not None:
+        vectordb.persist()
+    print(f"updated vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
+    return vectordb
+
 def _load_vs(persist_directory):
     from langchain.embeddings import HuggingFaceEmbeddings
     embedding = HuggingFaceEmbeddings()
@@ -236,7 +306,7 @@ def bot_fn(message, history, *args):
                 _clear(session_state)
                 session_state['current_file'] = fname
                 yield get_spinner() + f"Building vector store for **{os.path.basename(fname)}**, please be patient.", session_state, session_state
-                vs = _build_vs(fname, max_pages=kwargs.get('max_pages', 0))
+                vs = _build_vs_v2(fname, max_pages=kwargs.get('max_pages', 0))
                 SESSION_STATE['current_vs'] = vs
 
         # document QA
@@ -359,6 +429,8 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+
+    # _build_vs_v2('test_files/sample.pdf')
 
     import langchain
     langchain.debug = DEBUG
