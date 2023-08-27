@@ -235,6 +235,8 @@ min-height: 600px;
                         upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
+                # chatbot.textbox.elem_id = 'inputTextBox'
+                chatbot.chatbot.avatar_images = ("assets/user.png", "assets/bot.png")
 
                 # examples
                 with gr.Accordion("Examples", open=False) as examples_accordin:

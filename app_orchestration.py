@@ -46,7 +46,7 @@ ATTACHMENTS = {
     'session_state': dict(cls='State', value=_default_session_state),
     # 'image': dict(cls='Image', type='filepath'), #, source='webcam'),
     # 'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
-    'status': dict(cls='JSON', label='Status'),
+    'status': dict(cls='JSON', label='Status info'),
 }
 
 SETTINGS = {
@@ -378,11 +378,6 @@ def get_demo():
     css="""#chatbot {
 min-height: 600px;
 }"""
-
-    # NOTE: can not be inside another gr.Blocks
-    # _chatbot = gr.Chatbot(elem_id="chatbot", avatar_images = ("assets/user.png", "assets/bot.png"))
-    # _textbox = gr.Textbox(container=False, show_label=False, placeholder="Type a message...", scale=10, elem_id='inputTextBox', min_width=300)
-
     with gr.Blocks(css=css) as demo:
         # title
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
@@ -392,7 +387,8 @@ min-height: 600px;
         with gr.Row():
             # attachments, settings, and parameters
             with gr.Column(scale=1):
-                attachments = _create_from_dict(ATTACHMENTS)
+                with gr.Accordion("Info", open=False) as info_accordin:
+                    attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=True) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=True) as parameters_accordin:
@@ -410,6 +406,8 @@ min-height: 600px;
                         upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
+                chatbot.textbox.elem_id = 'inputTextBox'
+                chatbot.chatbot.avatar_images = ("assets/user.png", "assets/bot.png")
 
                 # examples
                 with gr.Accordion("Examples", open=False) as examples_accordin:
@@ -423,6 +421,7 @@ min-height: 600px;
                     qa_examples = gr.Examples(
                         ['<a href="\\file=test_files/flash_attention_v2.pdf">📁 flash_attention_v2.pdf</a>',
                          'Summarize the text.',
+                         'Tell me the main idea of the proposed algorithm.',
                          'Why flash attention v2 is better than v1?'],
                         inputs=chatbot.textbox, label="Documment QA Examples",
                     )

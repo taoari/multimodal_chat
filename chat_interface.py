@@ -149,8 +149,7 @@ class ChatInterface(Blocks):
                 if chatbot:
                     self.chatbot = chatbot.render()
                 else:
-                    self.chatbot = Chatbot(label="Chatbot", elem_id="chatbot", avatar_images = ("assets/user.png", "assets/bot.png"))
-
+                    self.chatbot = Chatbot(label="Chatbot")
                 with Group():
                     with Row():
                         if upload_btn:
@@ -177,7 +176,6 @@ class ChatInterface(Blocks):
                                 placeholder="Type a message...",
                                 scale=7,
                                 autofocus=autofocus,
-                                elem_id='inputTextBox',
                             )
                         if submit_btn:
                             if isinstance(submit_btn, Button):

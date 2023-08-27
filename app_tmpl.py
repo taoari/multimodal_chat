@@ -138,11 +138,6 @@ def get_demo():
     css="""#chatbot {
 min-height: 600px;
 }"""
-
-    # NOTE: can not be inside another gr.Blocks
-    # _chatbot = gr.Chatbot(elem_id="chatbot", avatar_images = ("assets/user.png", "assets/bot.png"))
-    # _textbox = gr.Textbox(container=False, show_label=False, placeholder="Type a message...", scale=10, elem_id='inputTextBox', min_width=300)
-
     with gr.Blocks(css=css) as demo:
         # title
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
@@ -170,6 +165,8 @@ min-height: 600px;
                         upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
+                chatbot.textbox.elem_id = 'inputTextBox'
+                chatbot.chatbot.avatar_images = ("assets/user.png", "assets/bot.png")
 
                 # examples
                 with gr.Accordion("Examples", open=False) as examples_accordin:
