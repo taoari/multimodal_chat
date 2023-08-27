@@ -72,8 +72,8 @@ def _create_from_dict(PARAMS, tabbed=False):
 # Bot fn
 ################################################################
 
-from utils import _reformat_message
-from llms import _random_bot_fn, _openai_stream_bot_fn
+from utils import _reformat_message, _reformat_history
+from llms import _random_bot_fn, _openai_stream_bot_fn, _print_messages
 
 def _echo_bot_fn(message, history, **kwargs):
     return message
@@ -81,6 +81,7 @@ def _echo_bot_fn(message, history, **kwargs):
 def _bot_fn(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
+    history = _reformat_history(history) # unformated history for LLM, for rich response applications
 
     kwargs['chat_engine'] = 'random' if 'chat_engine' not in kwargs or kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
@@ -94,15 +95,17 @@ def _bot_fn(message, history, *args):
     else:
         for m in bot_message:
             yield m
+        bot_message = m # for print
 
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     print(kwargs)
-    pprint(history + [[message, bot_message]])
+    _print_messages(history, message, bot_message, system=kwargs["system_prompt"])
 
 def _bot_fn_session_state(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
+    history = _reformat_history(history) # unformated history for LLM, for rich response applications
 
     session_state = kwargs['session_state']
     kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
@@ -124,11 +127,12 @@ def _bot_fn_session_state(message, history, *args):
         for m in bot_message:
             __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
             yield _reformat_message(m, _format=_format), session_state, status
+        bot_message = m # for print
 
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     print(kwargs)
-    pprint(history + [[message, bot_message]])
+    _print_messages(history, message, bot_message, system=kwargs["system_prompt"])
     session_state['previous_message'] = message
 
 bot_fn = _bot_fn_session_state if 'session_state' in {**ATTACHMENTS, **SETTINGS, **PARAMETERS} else _bot_fn

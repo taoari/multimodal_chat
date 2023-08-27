@@ -254,6 +254,11 @@ def _reformat_message(message, _format='plain'):
         return message
     return format_to_message(parse_message(message), _format=_format)
 
+def _reformat_history(history, _format='plain'):
+    if _format is None or _format == 'auto':
+        return history
+    return [[_reformat_message(human, _format=_format), _reformat_message(ai, _format=_format)] for human, ai in history]
+
 def get_spinner(variant='primary'):
     return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status"></div>"""
 
