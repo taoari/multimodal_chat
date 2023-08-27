@@ -84,23 +84,23 @@ COLLAPSE_TEMPLATE = """
 def format_to_message(res, _format='html'):
     if _format == 'html':
         msg = res["text"] if "text" in res else ""
-        if "images" in res:
+        if "images" in res and len(res["images"]) > 0:
             for filepath in res["images"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<img src="{filepath}" alt="{os.path.basename(filepath)}"/>'
-        if "audios" in res:
+        if "audios" in res and len(res["audios"]) > 0:
             for filepath in res["audios"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<audio controls><source src="{filepath}">{os.path.basename(filepath)}</audio>'
-        if "videos" in res:
+        if "videos" in res and len(res["videos"]) > 0:
             for filepath in res["videos"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<video controls><source src="{filepath}">{os.path.basename(filepath)}</video>'
-        if "files" in res:
+        if "files" in res and len(res["files"]) > 0:
             for filepath in res["files"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
-        if "buttons" in res:
+        if "buttons" in res and len(res["buttons"]) > 0:
             msg += '<br />'
             for btn in res["buttons"]:
                 # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
@@ -110,7 +110,7 @@ def format_to_message(res, _format='html'):
                 else:
                     msg += f""" <a class="btn btn-primary btn-chatbot-href text-white" href="{btn['href']}">{btn['text']}</a>"""
 
-        if "cards" in res:
+        if "cards" in res and len(res["cards"]) > 0:
             cards_msg = ""
             for card in res["cards"]:
                 _card = {}
@@ -120,7 +120,7 @@ def format_to_message(res, _format='html'):
                     _card["extra"] += format_to_message(dict(buttons=card["buttons"]))
                 cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **_card)
             msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
-        if "collapses" in res:
+        if "collapses" in res and len(res["collapses"]) > 0:
             import uuid
             collapses_msg_pre = ""
             for collapse in res["collapses"]:
@@ -145,12 +145,12 @@ def format_to_message(res, _format='html'):
             for card in res['cards']:
                 cards.append(f"**{card['title']}**:\n\t{card['text']}")
 
-        msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)])
+        msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)]).strip()
         # ignore buttons and collapses
     else:
         raise ValueError(f"Invalid format: {_format}")
 
-    return msg
+    return msg.strip()
 
 def _parse_and_delete(soup):
     res = dict(buttons=[], cards=[], collapses=[])
@@ -184,7 +184,7 @@ def _parse_and_delete(soup):
         elem.extract()
     return res
 
-def parse_message(message):
+def parse_message(message, cleanup=False):
     """Parse user message in HTML format to Json inputs for LLMs."""
     soup = BeautifulSoup(message, 'html.parser')
     res = _parse_and_delete(soup)
@@ -199,30 +199,31 @@ def parse_message(message):
         for unwanted in soup.select(tag):
             unwanted.extract()
     res["text"] = soup.text.strip()
-    res = {k: v for k, v in res.items() if v}
+    if cleanup:
+        res = {k: v for k, v in res.items() if v}
     return res
 
 def test_parse_message_image():
     target = dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
 
 def test_parse_message_audio():
     target = dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
 
 def test_parse_message_video():
     target = dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
 
 def test_parse_message_file():
     target = dict(files=["https://www.africau.edu/images/default/sample.pdf"])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
 
 def test_parse_message_button():
     target = dict(text="Hello, how can I assist you today?", 
             buttons=['Primary', dict(text='Secondary', value="the second choice"), 
                     dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
 
 def test_parse_message_card():
     # For test pass, buttons must be left if empty, order in value-type then href-type
@@ -233,20 +234,25 @@ def test_parse_message_card():
                 title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.",
                 buttons=[dict(text="Search", value="/search"),
                          dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
 
 def test_parse_message_spinner():
     message = get_spinner() + " Please be patient"
     target = dict(text="Please be patient")
-    assert target == parse_message(message)
+    assert target == parse_message(message, cleanup=True)
 
 def test_parse_message_collapse():
     target = dict(text="Final results goes here", collapses=[dict(
             title="Show progress", text="Scratch pad goes here", before=True)])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
     target = dict(text="Final results goes here", collapses=[dict(
             title="Show progress", text="Scratch pad goes here", before=False)])
-    assert target == parse_message(format_to_message(target))
+    assert target == parse_message(format_to_message(target), cleanup=True)
+
+def _reformat_message(message, _format='plain'):
+    if _format is None or _format == 'auto':
+        return message
+    return format_to_message(parse_message(message), _format=_format)
 
 def get_spinner(variant='primary'):
     return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status"></div>"""

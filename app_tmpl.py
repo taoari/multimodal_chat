@@ -44,7 +44,7 @@ ATTACHMENTS = {
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
-    '_format': dict(cls='Radio', choices=['html', 'plain'], value='html', 
+    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain'], value='auto', 
             interactive=True, label="Bot response format"),
 }
 
@@ -72,6 +72,7 @@ def _create_from_dict(PARAMS, tabbed=False):
 # Bot fn
 ################################################################
 
+from utils import _reformat_message
 from llms import _random_bot_fn, _openai_stream_bot_fn
 
 def _echo_bot_fn(message, history, **kwargs):
@@ -114,13 +115,15 @@ def _bot_fn_session_state(message, history, *args):
     session_state['message'] = message
     status = {**kwargs} # session_state, settings, and elapsed_time
     
+    # NOTE: _reformat_message could double check parse_message and format_to_message integrity
+    _format = kwargs['_format'] if '_format' in kwargs else 'auto'
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
-        yield bot_message, session_state, status
+        yield _reformat_message(bot_message, _format=_format), session_state, status
     else:
         for m in bot_message:
             __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
-            yield m, session_state, status
+            yield _reformat_message(m, _format=_format), session_state, status
 
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')

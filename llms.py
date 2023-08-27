@@ -163,9 +163,6 @@ def _random_bot_fn(message, history, **kwargs):
         bot_message = '\n'.join(samples.values())
     else:
         bot_message = random.choice(list(samples.values()))
-
-    _format = kwargs['_format'] if '_format' in kwargs else 'html'
-    bot_message = format_to_message(parse_message(bot_message), _format=_format)
     return bot_message
 
 def _openai_bot_fn(message, history, **kwargs):

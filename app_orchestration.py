@@ -23,7 +23,7 @@ def print(*args, **kwargs):
 ################################################################
 
 from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream
-from utils import parse_message, format_to_message, get_spinner
+from utils import parse_message, format_to_message, get_spinner, _reformat_message
 AVAILABLE_TOOLS = ['Search', 'OCR']
 
 #########
@@ -56,6 +56,8 @@ SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4'] + list(HF_ENDPOINTS.keys()),
             value='auto', 
             interactive=True, label="Chat engine"),
+    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain'], value='auto', 
+            interactive=True, label="Bot response format"),
 }
 
 PARAMETERS = {
@@ -354,13 +356,15 @@ def bot_fn(message, history, *args):
             'VS_KEYS': list(SESSION_STATE['vs'].keys()),
             **_parameters})
     
+    # NOTE: _reformat_message could double check parse_message and format_to_message integrity
+    _format = kwargs['_format'] if '_format' in kwargs else 'auto'
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
-        yield bot_message, session_state, status
+        yield _reformat_message(bot_message, _format=_format), session_state, status
     else:
         for m in bot_message:
             __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
-            yield m, session_state, status
+            yield _reformat_message(m, _format=_format), session_state, status
 
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
