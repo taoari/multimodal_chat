@@ -107,6 +107,14 @@ def _build_vs(fname, chunk_size=0, persist_directory=None,
     embedding = HuggingFaceEmbeddings()
 
     from langchain.vectorstores import Chroma
+
+    # NOTE: Chroma.from_documents auto combines all docs, must delete the db first
+    vectordb = Chroma(
+        embedding_function=embedding,
+        persist_directory=persist_directory
+    )
+    vectordb.delete_collection()
+
     vectordb = Chroma.from_documents(
         documents=docs,
         embedding=embedding,
@@ -114,7 +122,8 @@ def _build_vs(fname, chunk_size=0, persist_directory=None,
     )
     if persist_directory is not None:
         vectordb.persist()
-    print(f'vector db for {fname} done!')
+    print('vectordb count {}'.format(vectordb._collection.count()))
+    print(f'vectordb for {fname} done!')
 
     return vectordb
 
@@ -124,7 +133,7 @@ def _load_vs(persist_directory):
 
     from langchain.vectorstores import Chroma
     vectordb = Chroma(
-        embedding=embedding,
+        embedding_function=embedding,
         persist_directory=persist_directory
     )
     return vectordb
@@ -132,8 +141,6 @@ def _load_vs(persist_directory):
 ################################################################
 # Bot fn
 ################################################################
-
-memory = None
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
     session_state = kwargs['session_state']
@@ -155,9 +162,11 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     agent_kwargs = {
         "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
     }
-    global memory
-    if memory is None:
-        memory = ConversationBufferMemory(memory_key="memory", return_messages=True)
+
+    memory = ConversationBufferMemory(memory_key="memory", return_messages=True)
+    for human, ai in history:
+        memory.save_context({"input": human}, {"output": ai})
+    print(memory.load_memory_variables({}))
 
     mrkl = initialize_agent(tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True,
                 agent_kwargs=agent_kwargs, memory=memory)
@@ -172,7 +181,13 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     return mrkl.run(_msg)
 
 
+def _slash_bot_fn(message, history, **kwargs):
+    cmds = message.split(' ', maxsplit=1)
+    cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
+    return message
+
 def _is_document_qa(session_state):
+    # TODO: might cause bug with Undo
     cond1 = 'current_file' in session_state and session_state['current_file'] is not None and session_state['current_file'].endswith('.pdf')
     cond2 = 'current_vs' in SESSION_STATE and SESSION_STATE['current_vs'] is not None
     return cond1 and cond2
@@ -184,6 +199,12 @@ def _beautify_status(status):
 
     return status
 
+def _clear(session_state):
+    global SESSION_STATE
+    SESSION_STATE.clear()
+    session_state.clear()
+    return session_state
+
 def bot_fn(message, history, *args):
     global SESSION_STATE
     __TIC = time.time()
@@ -192,40 +213,48 @@ def bot_fn(message, history, *args):
     session_state = kwargs['session_state']
     kwargs['chat_engine'] = 'gpt-3.5-turbo-16k' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
-    msg_dict = parse_message(message)
-    if len(msg_dict['images']) > 0:
-        session_state['current_file'] = msg_dict['images'][-1]
-        session_state['context'] = None
-        SESSION_STATE['current_vs'] = None
-    elif len(msg_dict['files']) > 0:
-        session_state['current_file'] = msg_dict['files'][-1]
-        yield get_spinner() + f"Building vector store for **{os.path.basename(session_state['current_file'])}**, please be patient.", session_state, session_state
-        if session_state['current_file'].endswith('.pdf'):
-            vs = _build_vs(session_state['current_file'], max_pages=kwargs.get('max_pages', 0))
-            SESSION_STATE['current_vs'] = vs
+    if len(history) == 0 or message.startswith('/clear'):
+        _clear(session_state)
 
-    if _is_document_qa(session_state):
-        # Document QA if a PDF file is uploaded
-        if  msg_dict['text']:
-            vectordb = SESSION_STATE['current_vs']
-            res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
-            context = '\n\n'.join([doc.page_content for doc in res])
-            _kwargs = {'system_prompt': context, **kwargs}
-            bot_message = _llm_call_stream(message, history, **_kwargs)
-            session_state['context'] = context
-        else:
-            bot_message = format_to_message(dict(
-                    text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
-                    buttons=[dict(text='Summarize', value="Summarize the text.")],
-                ))
+    # slash cmd
+    if message.startswith('/'):
+        bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
-        # TODO: 1. agent history
-        # 2. fallback LLM
-        # need to modify kwargs['session_state']['current_file']
-        try:
-            bot_message = _langchain_agent_bot_fn(message, history, **kwargs)
-        except:
-            bot_message = _llm_call_stream(message, history, **kwargs)
+        # image or file uploaded
+        msg_dict = parse_message(message)
+        if len(msg_dict['images']) > 0:
+            _clear(session_state)
+            session_state['current_file'] = msg_dict['images'][-1]
+        elif len(msg_dict['files']) > 0:
+            fname = msg_dict['files'][-1]
+            if fname.endswith('.pdf'):
+                _clear(session_state)
+                session_state['current_file'] = fname
+                yield get_spinner() + f"Building vector store for **{os.path.basename(fname)}**, please be patient.", session_state, session_state
+                vs = _build_vs(fname, max_pages=kwargs.get('max_pages', 0))
+                SESSION_STATE['current_vs'] = vs
+
+        # document QA
+        if _is_document_qa(session_state):
+            # Document QA if a PDF file is uploaded
+            if  msg_dict['text']:
+                vectordb = SESSION_STATE['current_vs']
+                res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
+                context = '\n\n'.join(["Context:"] + [doc.page_content for doc in res])
+                _kwargs = {'system_prompt': context, **kwargs}
+                bot_message = _llm_call_stream(message, history, **_kwargs)
+                session_state['context'] = context
+            else:
+                bot_message = format_to_message(dict(
+                        text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
+                        buttons=[dict(text='Summarize', value="Summarize the text.")],
+                    ))
+        else:
+            # agent and fallback
+            try:
+                bot_message = _langchain_agent_bot_fn(message, history, **kwargs)
+            except:
+                bot_message = _llm_call_stream(message, history, **kwargs)
     
     session_state['message'] = message
     status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys())})
@@ -241,7 +270,7 @@ def bot_fn(message, history, *args):
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     print(kwargs)
-    pprint(history + [[message, bot_message]])
+    # pprint(history + [[message, bot_message]])
     session_state['previous_message'] = message
 
 ################################################################
