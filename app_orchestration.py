@@ -36,8 +36,11 @@ DESCRIPTION = """
 Simply enter text and press ENTER in the textbox to interact with the chatbot.
 """
 
-# current_vs can be caluclated from _get_hash(current_file, is_file=True)
-_default_session_state = dict(current_file=None, context=None, current_vs=None)
+_default_session_state = dict(current_file=None, 
+        context=None, 
+        current_vs=None, # current_vs can be caluclated from _get_hash(current_file, is_file=True)
+        context_switch_at=0 # history before context_switch_at should be ignored
+        )
 
 ATTACHMENTS = {
     'session_state': dict(cls='State', value=_default_session_state),
@@ -58,7 +61,7 @@ SETTINGS = {
 PARAMETERS = {
     'max_pages': dict(cls='Slider', minimum=0, maximum=16, value=8, step=1, 
             interactive=True, label="Max pages", info="Max pages to be processed for vector store (0 for all)."),
-    'query_k': dict(cls='Slider', minimum=1, maximum=10, value=3, step=1, 
+    'query_k': dict(cls='Slider', minimum=1, maximum=10, value=1, step=1, 
             interactive=True, label="Query k"),
 }
     
@@ -279,6 +282,7 @@ def _clear(session_state):
     # global SESSION_STATE
     # SESSION_STATE.clear()
     session_state.clear()
+    session_state.update(_default_session_state)
     return session_state
 
 def bot_fn(message, history, *args):
@@ -301,12 +305,14 @@ def bot_fn(message, history, *args):
         if len(msg_dict['images']) > 0:
             _clear(session_state)
             session_state['current_file'] = msg_dict['images'][-1]
+            session_state['context_switch_at'] = len(history)
         elif len(msg_dict['files']) > 0:
             fname = msg_dict['files'][-1]
             if fname.endswith('.pdf'):
                 _clear(session_state)
                 session_state['current_file'] = fname
                 session_state['current_vs'] = _get_hash(fname, is_file=True)
+                session_state['context_switch_at'] = len(history)
                 yield get_spinner() + f"Building vector store for **{os.path.basename(fname)}**, please be patient.", session_state, session_state
                 vs = _build_vs_v2(fname, max_pages=kwargs.get('max_pages', 0))
                 SESSION_STATE['vs'][session_state['current_vs']] = vs
@@ -318,11 +324,17 @@ def bot_fn(message, history, *args):
                 vectordb = SESSION_STATE['vs'][session_state['current_vs']]
                 res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
                 context = '\n\n'.join([doc.page_content for doc in res])
-                prompt = PROMPT_TEMPLATE_QA.format(context=context, question=msg_dict['text'])
-                bot_message = _llm_call_stream(prompt, [], **kwargs) # NOTE: QA does not need history 
-                # _kwargs = {'system_prompt': context, **kwargs}
-                # bot_message = _llm_call_stream(message, history, **_kwargs)
                 session_state['context'] = context
+                if False:
+                    # NOTE: QA without history
+                    prompt = PROMPT_TEMPLATE_QA.format(context=context, question=msg_dict['text'])
+                    bot_message = _llm_call_stream(prompt, [], **kwargs)
+                else:
+                    # NOTE: QA with history
+                    _history = history[session_state['context_switch_at']:] if 'context_switch_at' in session_state else history
+                    system_prompt = "Use the following pieces of context and chat history to answer the question.\n\n" + context
+                    _kwargs = {'system_prompt': system_prompt, **kwargs}
+                    bot_message = _llm_call_stream(message, _history, **_kwargs)
             else:
                 bot_message = format_to_message(dict(
                         text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
