@@ -126,22 +126,20 @@ def _print_messages(history, message, bot_message, system=None,
 def _random_bot_fn(message, history, **kwargs):
     from utils import get_spinner
 
-    _format = kwargs['_format'] if '_format' in kwargs else 'html'
-
     # Example multimodal messages
     samples = {}
     target = dict(text="I love cat", images=["https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"])
-    samples['image'] = format_to_message(target, _format=_format)
+    samples['image'] = format_to_message(target)
     target = dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])
-    samples['audio'] = format_to_message(target, _format=_format)
+    samples['audio'] = format_to_message(target)
     target = dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])
-    samples['video'] = format_to_message(target, _format=_format)
+    samples['video'] = format_to_message(target)
     target = dict(files=["https://www.africau.edu/images/default/sample.pdf"])
-    samples['pdf'] = format_to_message(target, _format=_format)
+    samples['pdf'] = format_to_message(target)
     target = dict(text="Hello, how can I assist you today?", 
             buttons=['Primary', dict(text='Secondary', value="the second choice"), 
                     dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])
-    samples['button'] = format_to_message(target, _format=_format)
+    samples['button'] = format_to_message(target)
     target = dict(text="We found the following items:", cards=[
         dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", title="Siam Lilac Point", 
                 text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.", buttons=[]),
@@ -149,15 +147,15 @@ def _random_bot_fn(message, history, **kwargs):
                 title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads.",
                 buttons=[dict(text="Search", value="/search"),
                          dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])])
-    samples['card'] = format_to_message(target, _format=_format)
+    samples['card'] = format_to_message(target)
     _message = get_spinner() + " Please be patient"
     samples['spinner'] = _message
     target = dict(text="Final results goes here", collapses=[dict(
             title="Show progress", text="Scratch pad goes here", before=True)])
-    samples['collapse_before'] = format_to_message(target, _format=_format)
+    samples['collapse_before'] = format_to_message(target)
     target = dict(text="Final results goes here", collapses=[dict(
             title="Show progress", text="Scratch pad goes here", before=False)])
-    samples['collapse'] = format_to_message(target, _format=_format)
+    samples['collapse'] = format_to_message(target)
 
     if message in samples:
         bot_message = samples[message]
@@ -165,6 +163,9 @@ def _random_bot_fn(message, history, **kwargs):
         bot_message = '\n'.join(samples.values())
     else:
         bot_message = random.choice(list(samples.values()))
+
+    _format = kwargs['_format'] if '_format' in kwargs else 'html'
+    bot_message = format_to_message(parse_message(bot_message), _format=_format)
     return bot_message
 
 def _openai_bot_fn(message, history, **kwargs):

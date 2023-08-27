@@ -112,7 +112,7 @@ def _bot_fn_session_state(message, history, *args):
         }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     session_state['message'] = message
-    status = {**session_state}
+    status = {**kwargs} # session_state, settings, and elapsed_time
     
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
