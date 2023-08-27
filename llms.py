@@ -133,14 +133,15 @@ def _random_bot_fn(message, history, **kwargs):
         audio=format_to_message(dict(audios=["https://upload.wikimedia.org/wikipedia/commons/2/28/Caldhu.wav"])),
         video=format_to_message(dict(videos=["https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"])),
         pdf=format_to_message(dict(files=["https://www.africau.edu/images/default/sample.pdf"])),
-        button=format_to_message(dict(text="Hello, how can I assist you today?", buttons=['Primary', dict(text='Secondary', value="the second choice")])),
+        button=format_to_message(dict(text="Hello, how can I assist you today?", 
+                buttons=['Primary', dict(text='Secondary', value="the second choice"), dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg")])),
         card=format_to_message(dict(text="We found the following items:", cards=[
             dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", title="Siam Lilac Point", 
                  text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads, with silver-gray fur surrounding those points."),
             dict(image="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg", 
                  title="Siam Lilac Point", text="The lilac point Siamese cat usually has a pale pink nose and pale pink paw pads, with silver-gray fur surrounding those points.",
-                 extra="""<a href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" class="btn btn-primary btn-sm text-white">More</a>"""),
-        ])),
+                 buttons=[dict(text="More", href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"),
+                          dict(text="Search", value="/search")])])),
         spinner=get_spinner() + " Please be patient",
         collapse_before=format_to_message(dict(text="Final results goes here", collapses=[dict(
                 title="Show progress", text="Scratch pad goes here", before=True)])),
@@ -149,7 +150,7 @@ def _random_bot_fn(message, history, **kwargs):
     )
     if 'pdf' in message:
         bot_message = samples['pdf']
-    elif 'button' in message:
+    elif 'button' in message or 'btn' in message:
         bot_message = samples['button']
     elif 'card' in message:
         bot_message = samples['card']

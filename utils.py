@@ -35,26 +35,6 @@ def _prefix_local_file(url):
     else:
         return url
 
-def parse_message(message):
-    """Parse user message in HTML format to Json inputs for LLMs."""
-    soup = BeautifulSoup(message, 'html.parser')
-    res = {}
-    
-    # extract img, audio, video, and general files
-    # res["text"] = soup.text
-    res["images"] = [_trim_local_file(img.get("src")) for img in soup.find_all('img')]
-    res["audios"] = [_trim_local_file(audio.source.get("src")) for audio in soup.find_all('audio')]
-    res["videos"] = [_trim_local_file(video.source.get("src")) for video in soup.find_all('video')]
-    res["files"] = [_trim_local_file(a.get("href")) for a in soup.find_all('a')]
-    res["buttons"] = [dict(text=btn.text, value=btn.value) for btn in soup.find_all('button')]
-    
-    # exclude img, audio, video, href texts in "text"
-    for tag in ['img', 'audio', 'video', 'a', 'button']:
-        for unwanted in soup.select(tag):
-            unwanted.extract()
-    res["text"] = soup.text.strip()
-    return res
-
 CARD_TEMPLATE = """  
   <div class="card" style="max-width: 18rem;">
     <img src="{image}" class="card-img-top" alt="{alt}">
@@ -96,11 +76,10 @@ CARD_TEMPLATE = """
 
 # collapse details
 COLLAPSE_TEMPLATE = """
-<details>
-<summary id="{id}">{title}</summary>
+<details id="{id}">
+<summary>{title}</summary>
 {text}
-</details>
-"""
+</details>"""
 
 def format_to_message(res):
     msg = res["text"] if "text" in res else ""
@@ -124,29 +103,79 @@ def format_to_message(res):
         msg += '<br />'
         for btn in res["buttons"]:
             # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
-            btn_text, btn_value = (btn, btn) if isinstance(btn, str) else (btn['text'], btn['value'])
-            msg += f' <a class="btn btn-primary btn-chatbot text-white" value="{btn_value}">{btn_text}</a>'
+            btn = dict(text=btn, value=btn) if isinstance(btn, str) else btn
+            if "value" in btn:
+                msg += f""" <a class="btn btn-primary btn-chatbot text-white" value="{btn['value']}">{btn['text']}</a>"""
+            else:
+                msg += f""" <a class="btn btn-primary text-white" href="{btn['href']}">{btn['text']}</a>"""
+
     if "cards" in res:
         cards_msg = ""
         for card in res["cards"]:
-            card = card.copy()
+            _card = {}
             for key in ['image', 'title', 'text', 'extra']:
-                card[key] = card[key] if key in card else ""
-            cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **card)
+                _card[key] = card[key] if key in card else ""
+            if "buttons" in card:
+                _card["extra"] += format_to_message(dict(buttons=card["buttons"]))
+            cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **_card)
         msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
     if "collapses" in res:
         import uuid
         collapses_msg_pre = ""
         for collapse in res["collapses"]:
-            _collapse = COLLAPSE_TEMPLATE.format(id=uuid.uuid4(), 
+            before = 'before' in collapse and collapse['before']
+            _collapse = COLLAPSE_TEMPLATE.format(id=str(uuid.uuid4()) + ("-before" if before else ""), 
                     title=collapse['title'], text=collapse['text'])
-            if 'before' in collapse and collapse['before']:
+            if before:
                 collapses_msg_pre += _collapse
             else:
                 msg += _collapse
         msg = collapses_msg_pre + msg # collapses are usually are the front
 
     return msg
+
+def _parse_and_delete(soup):
+    res = dict(buttons=[], cards=[], collapses=[])
+    # collapses
+    for elem in soup.find_all("details"):
+        collapse = dict(title=elem.summary.text.strip(),
+                before='before' in elem.get("id"))
+        elem.summary.extract()
+        collapse["text"]=elem.text.strip()
+
+        res['collapses'].append(collapse)
+        elem.extract()
+    # cards : must before buttons as can contain buttons
+    for elem in soup.find_all("div", class_="card"):
+        card = dict(image=_trim_local_file(elem.img.get("src")),
+                    title=elem.div.h5.text.lstrip("**").rstrip("**"),
+                    text=elem.div.p.text)
+        res['cards'].append(card)
+        elem.extract()
+    # buttons
+    for elem in soup.find_all('a', class_='btn-chatbot'):
+        btn = dict(text=elem.text.strip(), value=elem.get("value"))
+        btn = btn["text"] if btn["text"] == btn["value"] else btn
+        res['buttons'].append(btn)
+        elem.extract()
+    return res
+
+def parse_message(message):
+    """Parse user message in HTML format to Json inputs for LLMs."""
+    soup = BeautifulSoup(message, 'html.parser')
+    res = _parse_and_delete(soup)
+    # extract img, audio, video, and general files
+    # res["text"] = soup.text
+    res["images"] = [_trim_local_file(img.get("src")) for img in soup.find_all('img')]
+    res["audios"] = [_trim_local_file(audio.source.get("src")) for audio in soup.find_all('audio')]
+    res["videos"] = [_trim_local_file(video.source.get("src")) for video in soup.find_all('video')]
+    res["files"] = [_trim_local_file(a.get("href")) for a in soup.find_all('a')]
+    # exclude img, audio, video, href texts in "text"
+    for tag in ['img', 'audio', 'video', 'a', 'button']:
+        for unwanted in soup.select(tag):
+            unwanted.extract()
+    res["text"] = soup.text.strip()
+    return res
 
 def get_spinner(variant='primary'):
     return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status"></div>"""
