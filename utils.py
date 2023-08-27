@@ -66,6 +66,31 @@ CARD_TEMPLATE = """
   </div>
 """
 
+COLLAPSE_TEMPLATE = """
+<p>
+  <a class="btn btn-outline-primary" data-bs-toggle="collapse" href="#{id}" role="button" aria-expanded="false" aria-controls="collapseExample">
+    📝 {title}
+  </a>
+</p>
+<div class="collapse" id="{id}">
+  <div class="card card-body">
+    {text}
+  </div>
+</div>"""
+
+COLLAPSE_TEMPLATE = """
+<div class="accordion accordion-flush" id="{id}-example">
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="{id}-heading">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#{id}-collapse" aria-expanded="false" aria-controls="{id}-collapse">
+         📝 {title}
+      </button>
+    </h2>
+    <div id="{id}-collapse" class="accordion-collapse collapse" aria-labelledby="{id}-heading" data-bs-parent="#{id}-example">
+      <div class="accordion-body">{text}</div>
+    </div>
+  </div>"""
+
 def format_to_message(res):
     msg = res["text"] if "text" in res else ""
     if "images" in res:
@@ -98,6 +123,13 @@ def format_to_message(res):
                 card[key] = card[key] if key in card else ""
             cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **card)
         msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
+    if "collapses" in res:
+        import uuid
+        collapses_msg = ""
+        for collapse in res["collapses"]:
+            collapses_msg += COLLAPSE_TEMPLATE.format(id=uuid.uuid4(), 
+                    title=collapse['title'], text=collapse['text'])
+        msg = collapses_msg + msg # collapses are usually are the front
 
     return msg
 

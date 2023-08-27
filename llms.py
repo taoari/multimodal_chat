@@ -142,7 +142,8 @@ def _random_bot_fn(message, history, **kwargs):
                  extra="""<a href="https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg" class="btn btn-primary btn-sm text-white">More</a>"""),
         ])),
         get_spinner() + " Please be patient",
-
+        format_to_message(dict(text="Final results goes here", collapses=[dict(
+                title="Show progress", text="Scratch pad goes here")])),
     ]
     if 'pdf' in message:
         bot_message = samples[4]
@@ -152,6 +153,8 @@ def _random_bot_fn(message, history, **kwargs):
         bot_message = samples[6]
     elif 'spin' in message:
         bot_message = samples[7]
+    elif 'collapse' in message:
+        bot_message = samples[8]
     else:
         bot_message = random.choice(samples)
     return bot_message
