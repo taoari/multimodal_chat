@@ -36,7 +36,8 @@ DESCRIPTION = """
 Simply enter text and press ENTER in the textbox to interact with the chatbot.
 """
 
-_default_session_state = dict(current_file=None, context=None)
+# current_vs can be caluclated from _get_hash(current_file, is_file=True)
+_default_session_state = dict(current_file=None, context=None, current_vs=None)
 
 ATTACHMENTS = {
     'session_state': dict(cls='State', value=_default_session_state),
@@ -63,7 +64,7 @@ PARAMETERS = {
     
 KWARGS = {} # use for chatbot additional_inputs, do NOT change
 
-SESSION_STATE = {"current_vs": None} # for complex object
+SESSION_STATE = {"vs": {}} # for complex object
 
 DEBUG = True
     
@@ -197,7 +198,7 @@ def _build_vs_v2(fname, chunk_size=0, persist_directory=None,
     print(f"updated vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
     return vectordb
 
-def _load_vs(persist_directory):
+def _load_vs(persist_directory=None):
     from langchain.embeddings import HuggingFaceEmbeddings
     embedding = HuggingFaceEmbeddings()
 
@@ -264,7 +265,7 @@ def _slash_bot_fn(message, history, **kwargs):
 def _is_document_qa(session_state):
     # TODO: might cause bug with Undo
     cond1 = 'current_file' in session_state and session_state['current_file'] is not None and session_state['current_file'].endswith('.pdf')
-    cond2 = 'current_vs' in SESSION_STATE and SESSION_STATE['current_vs'] is not None
+    cond2 = 'vs' in SESSION_STATE and 'current_vs' in session_state and session_state['current_vs'] in SESSION_STATE['vs']
     return cond1 and cond2
 
 def _beautify_status(status):
@@ -275,8 +276,8 @@ def _beautify_status(status):
     return status
 
 def _clear(session_state):
-    global SESSION_STATE
-    SESSION_STATE.clear()
+    # global SESSION_STATE
+    # SESSION_STATE.clear()
     session_state.clear()
     return session_state
 
@@ -305,15 +306,16 @@ def bot_fn(message, history, *args):
             if fname.endswith('.pdf'):
                 _clear(session_state)
                 session_state['current_file'] = fname
+                session_state['current_vs'] = _get_hash(fname, is_file=True)
                 yield get_spinner() + f"Building vector store for **{os.path.basename(fname)}**, please be patient.", session_state, session_state
                 vs = _build_vs_v2(fname, max_pages=kwargs.get('max_pages', 0))
-                SESSION_STATE['current_vs'] = vs
+                SESSION_STATE['vs'][session_state['current_vs']] = vs
 
         # document QA
         if _is_document_qa(session_state):
             # Document QA if a PDF file is uploaded
             if  msg_dict['text']:
-                vectordb = SESSION_STATE['current_vs']
+                vectordb = SESSION_STATE['vs'][session_state['current_vs']]
                 res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
                 context = '\n\n'.join([doc.page_content for doc in res])
                 prompt = PROMPT_TEMPLATE_QA.format(context=context, question=msg_dict['text'])
@@ -334,7 +336,8 @@ def bot_fn(message, history, *args):
                 bot_message = _llm_call_stream(message, history, **kwargs)
     
     session_state['message'] = message
-    status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys())})
+    status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys()),
+            'VS_KEYS': list(SESSION_STATE['vs'].keys())})
     
     if isinstance(bot_message, str):
         __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
