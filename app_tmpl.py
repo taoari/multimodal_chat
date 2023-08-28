@@ -35,13 +35,13 @@ Markdown description here. Features:
 """
 
 ATTACHMENTS = {
-    'session_state': dict(cls='State', value={}),
-    'image': dict(cls='Image', type='filepath'), #, source='webcam'),
+    'image': dict(cls='Image', type='filepath', label="Input"), #, source='webcam'),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
     'status': dict(cls='JSON', label='Status info'),
 }
 
 SETTINGS = {
+    'session_state': dict(cls='State', value={}),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain'], value='auto', 
@@ -64,7 +64,8 @@ def _create_from_dict(PARAMS, tabbed=False):
         if not tabbed:
             params[name] = getattr(gr, cls_)(**kwargs)
         else:
-            with gr.Tab(name):
+            tab_name = kwargs['label'] if 'label' in kwargs else name
+            with gr.Tab(tab_name):
                 params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
@@ -156,7 +157,7 @@ min-height: 600px;
         with gr.Row():
             # attachments, settings, and parameters
             with gr.Column(scale=1):
-                attachments = _create_from_dict(ATTACHMENTS)
+                attachments = _create_from_dict(ATTACHMENTS, tabbed=True)
                 with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=False) as parameters_accordin:
