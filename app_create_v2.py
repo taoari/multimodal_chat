@@ -72,7 +72,7 @@ ATTACHMENTS = {
     'draw_mask': dict(cls='Image', source="upload", tool="sketch", interactive=True, 
                 type='pil', label='Draw mask', **IMAGE_KWARGS),
     'feathered_mask': dict(cls='Image', 
-                interactive=False, label="Feathered mask preview", **IMAGE_KWARGS),
+                interactive=False, label="Feathered mask", **IMAGE_KWARGS),
 }
 
 SETTINGS = {
@@ -102,7 +102,8 @@ def _create_from_dict(PARAMS, tabbed=False):
         if not tabbed:
             params[name] = getattr(gr, cls_)(**kwargs)
         else:
-            with gr.Tab(name):
+            tab_name = kwargs['label'] if 'label' in kwargs else name
+            with gr.Tab(tab_name):
                 params[name] = getattr(gr, cls_)(**kwargs)
     return params
 

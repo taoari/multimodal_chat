@@ -418,13 +418,6 @@ min-height: 600px;
 
                 # examples
                 with gr.Accordion("Examples", open=False) as examples_accordin:
-                    chat_examples = gr.Examples(
-                        ["What's the Everett interpretation of quantum mechanics?",
-                        'Give me a list of the top 10 dive sites you would recommend around the world.',
-                        'Write a Python code to calculate Fibonacci numbers.'
-                        ],
-                        inputs=chatbot.textbox, label="AI Chat Examples",
-                    )
                     qa_examples = gr.Examples(
                         ['<a href="\\file=test_files/flash_attention_v2.pdf">📁 flash_attention_v2.pdf</a>',
                          'Summarize the text.',
@@ -437,6 +430,13 @@ min-height: 600px;
                          'What is the patient name?',
                          'What is the prescription?'],
                         inputs=chatbot.textbox, label="Image OCR Examples",
+                    )
+                    chat_examples = gr.Examples(
+                        ["What's the Everett interpretation of quantum mechanics?",
+                        'Give me a list of the top 10 dive sites you would recommend around the world.',
+                        'Write a Python code to calculate Fibonacci numbers.'
+                        ],
+                        inputs=chatbot.textbox, label="AI Chat Examples",
                     )
             # additional handlers
             for name, attach in attachments.items():
