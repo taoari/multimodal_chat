@@ -23,8 +23,8 @@ def print(*args, **kwargs):
 ################################################################
 
 from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream
-from utils import parse_message, format_to_message, get_spinner, _reformat_message
-AVAILABLE_TOOLS = ['Search', 'OCR']
+from utils import parse_message, format_to_message, get_spinner, _reformat_message, _reformat_history
+AVAILABLE_TOOLS = ['Search', 'OCR', 'Barcode']
 
 #########
 
@@ -292,13 +292,14 @@ def bot_fn(message, history, *args):
     global SESSION_STATE
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
+    history = _reformat_history(history) # unformated history for LLM, for rich response applications
+    plain_message = _reformat_message(message)
 
     session_state = kwargs['session_state']
     kwargs['chat_engine'] = 'gpt-3.5-turbo-0613' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     if len(history) == 0 or message.startswith('/clear'):
         _clear(session_state)
-
     # slash cmd
     if message.startswith('/'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
@@ -339,7 +340,7 @@ def bot_fn(message, history, *args):
                     _history = history[session_state['context_switch_at']:] if 'context_switch_at' in session_state else history
                     system_prompt = "Use the following pieces of context and chat history to answer the question.\n\n" + context
                     _kwargs = {'system_prompt': system_prompt, **kwargs}
-                    bot_message = _llm_call_stream(message, _history, **_kwargs)
+                    bot_message = _llm_call_stream(plain_message, _history, **_kwargs)
             else:
                 bot_message = format_to_message(dict(
                         text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
@@ -348,9 +349,10 @@ def bot_fn(message, history, *args):
         else:
             # agent and fallback
             try:
-                bot_message = _langchain_agent_bot_fn(message, history, **kwargs)
-            except:
-                bot_message = _llm_call_stream(message, history, **kwargs)
+                bot_message = _langchain_agent_bot_fn(plain_message, history, **kwargs)
+            except Exception as e:
+                print(e)
+                bot_message = _llm_call_stream(plain_message, history, **kwargs)
     
     session_state['message'] = message
     _parameters = {k: v for k,v in kwargs.items() if k not in {'session_state', 'status'}}

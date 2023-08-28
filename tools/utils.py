@@ -27,3 +27,11 @@ def get_tool(name, llm=None):
             func=ocr,
             description="perform ocr on an image for Optical Character Recognition."
         )
+    
+    elif name == 'Barcode':
+        from tools.barcode import get_barcodes_tool
+        return Tool(
+            name="Barcode",
+            func=get_barcodes_tool,
+            description='barcode or QR code detection on given image'
+        )
