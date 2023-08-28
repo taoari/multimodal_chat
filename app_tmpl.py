@@ -44,7 +44,7 @@ SETTINGS = {
     'session_state': dict(cls='State', value={}),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
-    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain'], value='auto', 
+    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
             interactive=True, label="Bot response format"),
 }
 

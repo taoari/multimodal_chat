@@ -147,10 +147,13 @@ def format_to_message(res, _format='html'):
 
         msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)]).strip()
         # ignore buttons and collapses
+    elif _format == 'json':
+        import json
+        msg = json.dumps(res, indent=2)
     else:
         raise ValueError(f"Invalid format: {_format}")
 
-    return msg.strip()
+    return msg
 
 def _parse_and_delete(soup):
     res = dict(buttons=[], cards=[], collapses=[])
@@ -252,7 +255,7 @@ def test_parse_message_collapse():
 def _reformat_message(message, _format='plain'):
     if _format is None or _format == 'auto':
         return message
-    return format_to_message(parse_message(message), _format=_format)
+    return format_to_message(parse_message(message, cleanup=True), _format=_format)
 
 def _reformat_history(history, _format='plain'):
     if _format is None or _format == 'auto':
