@@ -138,7 +138,8 @@ min-height: 600px;
                         # upload_btn=None,
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
-                # chatbot.textbox.elem_id = 'inputTextBox'
+                chatbot.chatbot.elem_id = 'chatbot' # for css
+                # chatbot.textbox.elem_id = 'inputTextBox' # for buttons
                 chatbot.chatbot.avatar_images = ("assets/user.png", "assets/openai.png")
 
                 # examples
