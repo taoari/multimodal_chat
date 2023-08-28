@@ -20,9 +20,11 @@ pytesseract
 easyocr
 Pillow<=10.0.0 # easyocr depends on Pillow 9.5.0
 
+# for barcode and qr code
+pyzbar
+
 # stable diffusion
 stability-sdk
-# langdetect
 
 # for prompts
 datasets
