@@ -266,6 +266,32 @@ def get_temp_file_name(prefix='gradio/app-', suffix='.png'):
     import tempfile
     fname = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix).name
     return fname
+
+def fix_exif_orientation(filepath, outpath=None):
+    from PIL import Image, ExifTags
+
+    try:
+        outpath = filepath if outpath is None else outpath
+        image=Image.open(filepath)
+
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation]=='Orientation':
+                break
+        
+        exif = image._getexif()
+
+        if exif[orientation] == 3:
+            image=image.rotate(180, expand=True)
+        elif exif[orientation] == 6:
+            image=image.rotate(270, expand=True)
+        elif exif[orientation] == 8:
+            image=image.rotate(90, expand=True)
+
+        image.save(outpath)
+        image.close()
+    except:
+        # cases: image don't have getexif
+        pass
     
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.

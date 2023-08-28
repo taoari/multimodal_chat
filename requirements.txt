@@ -17,6 +17,8 @@ chromadb
 
 # for OCR
 pytesseract
+easyocr
+Pillow<=10.0.0 # easyocr depends on Pillow 9.5.0
 
 # stable diffusion
 stability-sdk

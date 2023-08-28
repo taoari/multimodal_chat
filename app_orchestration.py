@@ -309,6 +309,8 @@ def bot_fn(message, history, *args):
             _clear(session_state)
             session_state['current_file'] = msg_dict['images'][-1]
             session_state['context_switch_at'] = len(history)
+            from utils import fix_exif_orientation
+            fix_exif_orientation(session_state['current_file'])
         elif len(msg_dict['files']) > 0:
             fname = msg_dict['files'][-1]
             if fname.endswith('.pdf'):
