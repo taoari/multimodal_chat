@@ -2,7 +2,9 @@ import cv2
 from PIL import Image, ImageDraw, ImageFont
 from pyzbar.pyzbar import decode
 
-from utils import parse_message, format_to_message
+"""
+NOTE: requires arial.ttf on linux and mac os x for PIL.ImageFont
+"""
 
 def image_resize(img, shape):
     height, width = img.shape[:2]

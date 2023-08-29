@@ -24,9 +24,17 @@ def print(*args, **kwargs):
 
 from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream
 from utils import parse_message, format_to_message, get_spinner, _reformat_message, _reformat_history
-AVAILABLE_TOOLS = ['Search', 'OCR', 'Barcode']
 
-#########
+AVAILABLE_TOOLS = ['Search', 'OCR', 'Barcode']
+SESSION_STATE = {"vs": {}} # for complex object
+DEBUG = True
+
+PROMPT_TEMPLATE_QA = """Use the following pieces of context to answer the question at the end.
+{context}
+Question: {question}
+Answer: """
+
+################
 
 TITLE = "AI Orchestration"
 
@@ -36,11 +44,14 @@ DESCRIPTION = """
 Simply enter text and press ENTER in the textbox to interact with the chatbot.
 """
 
+# One can assume that keys of _default_session_state always exist
 _default_session_state = dict(current_file=None, 
         context=None, 
         current_vs=None, # current_vs can be caluclated from _get_hash(current_file, is_file=True)
-        context_switch_at=0 # history before context_switch_at should be ignored
-        )
+        context_switch_at=0, # history before context_switch_at should be ignored
+        message=None,
+        previous_message=None,
+   )
 
 ATTACHMENTS = {
     'session_state': dict(cls='State', value=_default_session_state),
@@ -56,7 +67,7 @@ SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4'] + list(HF_ENDPOINTS.keys()),
             value='auto', 
             interactive=True, label="Chat engine"),
-    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain'], value='auto', 
+    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
             interactive=True, label="Bot response format"),
 }
 
@@ -69,21 +80,27 @@ PARAMETERS = {
 }
     
 KWARGS = {} # use for chatbot additional_inputs, do NOT change
-
-SESSION_STATE = {"vs": {}} # for complex object
-
-DEBUG = True
     
 ################################################################
 # utils
 ################################################################
 
-def _create_from_dict(PARAMS):
+def _create_from_dict(PARAMS, tabbed=False):
     params = {}
     for name, kwargs in PARAMS.items():
         cls_ = kwargs['cls']; del kwargs['cls']
-        params[name] = getattr(gr, cls_)(**kwargs)
+        if not tabbed:
+            params[name] = getattr(gr, cls_)(**kwargs)
+        else:
+            tab_name = kwargs['label'] if 'label' in kwargs else name
+            with gr.Tab(tab_name):
+                params[name] = getattr(gr, cls_)(**kwargs)
     return params
+
+def _clear(session_state):
+    session_state.clear()
+    session_state.update(_default_session_state)
+    return session_state
 
 def _build_vs(fname, chunk_size=0, persist_directory=None, 
             max_pages=0, verbose=False):
@@ -219,10 +236,8 @@ def _load_vs(persist_directory=None):
 # Bot fn
 ################################################################
 
-PROMPT_TEMPLATE_QA = """Use the following pieces of context to answer the question at the end.
-{context}
-Question: {question}
-Answer: """
+from utils import _reformat_message, _reformat_history
+from llms import _random_bot_fn, _openai_stream_bot_fn, _print_messages
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
     session_state = kwargs['session_state']
@@ -260,8 +275,10 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
         session_state['current_file'] = msg_dict['images'][-1]
     else:
         _msg = msg_dict['text']
-    return mrkl.run(_msg)
-
+    bot_message = mrkl.run(_msg)
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, variant='secondary')
+    return bot_message
 
 def _slash_bot_fn(message, history, **kwargs):
     cmds = message.split(' ', maxsplit=1)
@@ -281,25 +298,21 @@ def _beautify_status(status):
 
     return status
 
-def _clear(session_state):
-    # global SESSION_STATE
-    # SESSION_STATE.clear()
-    session_state.clear()
-    session_state.update(_default_session_state)
-    return session_state
-
 def bot_fn(message, history, *args):
-    global SESSION_STATE
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
-    history = _reformat_history(history) # unformated history for LLM, for rich response applications
+    session_state = kwargs['session_state']
+    if len(history) == 0 or message == '/clear':
+        _clear(session_state)
+    # unformated LLM history for rich response applications, keep only after latest context switch
+    history = _reformat_history(history[session_state['context_switch_at']:])
     plain_message = _reformat_message(message)
 
-    session_state = kwargs['session_state']
+    """ BEGIN: Update only this part if necessary """
+
+    kwargs['verbose'] = True # auto print llm calls
     kwargs['chat_engine'] = 'gpt-3.5-turbo-0613' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
-    if len(history) == 0 or message.startswith('/clear'):
-        _clear(session_state)
     # slash cmd
     if message.startswith('/'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
@@ -337,10 +350,9 @@ def bot_fn(message, history, *args):
                     bot_message = _llm_call_stream(prompt, [], **kwargs)
                 else:
                     # NOTE: QA with history
-                    _history = history[session_state['context_switch_at']:] if 'context_switch_at' in session_state else history
                     system_prompt = "Use the following pieces of context and chat history to answer the question.\n\n" + context
                     _kwargs = {'system_prompt': system_prompt, **kwargs}
-                    bot_message = _llm_call_stream(plain_message, _history, **_kwargs)
+                    bot_message = _llm_call_stream(plain_message, history, **_kwargs)
             else:
                 bot_message = format_to_message(dict(
                         text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
@@ -359,6 +371,8 @@ def bot_fn(message, history, *args):
     status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys()),
             'VS_KEYS': list(SESSION_STATE['vs'].keys()),
             **_parameters})
+
+    """ END: Update only this part if necessary """
     
     # NOTE: _reformat_message could double check parse_message and format_to_message integrity
     _format = kwargs['_format'] if '_format' in kwargs else 'auto'
@@ -369,11 +383,12 @@ def bot_fn(message, history, *args):
         for m in bot_message:
             __TOC = time.time(); status['elapsed_time'] = __TOC - __TIC
             yield _reformat_message(m, _format=_format), session_state, status
+        bot_message = m # for print
 
+    # print(kwargs)
+    # _print_messages(history, message, bot_message, system=kwargs["system_prompt"], variant='secondary')
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
-    # print({k: v for k,v in kwargs.items() if k not in {'session_state', 'status'}})
-    # pprint(history + [[message, bot_message]])
     session_state['previous_message'] = message
 
 ################################################################

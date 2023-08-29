@@ -21,6 +21,10 @@ def print(*args, **kwargs):
 # Global variables
 ################################################################
 
+DEBUG = True
+
+################
+
 TITLE = "Multimodal Chatbot Template"
 
 DESCRIPTION = """
@@ -34,6 +38,13 @@ Markdown description here. Features:
   * Cards (type in "card")
 """
 
+# One can assume that keys of _default_session_state always exist
+_default_session_state = dict(
+        context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
+        message=None,
+        previous_message=None,
+    )
+
 ATTACHMENTS = {
     'image': dict(cls='Image', type='filepath', label="Input"), #, source='webcam'),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
@@ -41,7 +52,7 @@ ATTACHMENTS = {
 }
 
 SETTINGS = {
-    'session_state': dict(cls='State', value={}),
+    'session_state': dict(cls='State', value=_default_session_state),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
@@ -68,6 +79,11 @@ def _create_from_dict(PARAMS, tabbed=False):
             with gr.Tab(tab_name):
                 params[name] = getattr(gr, cls_)(**kwargs)
     return params
+
+def _clear(session_state):
+    session_state.clear()
+    session_state.update(_default_session_state)
+    return session_state
 
 ################################################################
 # Bot fn
@@ -106,9 +122,16 @@ def _bot_fn(message, history, *args):
 def _bot_fn_session_state(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
-    history = _reformat_history(history) # unformated history for LLM, for rich response applications
-
     session_state = kwargs['session_state']
+    if len(history) == 0 or message == '/clear':
+        _clear(session_state)
+    # unformated LLM history for rich response applications, keep only after latest context switch
+    history = _reformat_history(history[session_state['context_switch_at']:])
+    plain_message = _reformat_message(message)
+
+    """ BEGIN: Update only this part if necessary """
+
+    kwargs['verbose'] = True # auto print llm calls
     kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
 
     bot_message = {'random': _random_bot_fn,
@@ -118,6 +141,8 @@ def _bot_fn_session_state(message, history, *args):
     
     session_state['message'] = message
     status = {**kwargs} # session_state, settings, and elapsed_time
+
+    """ END: Update only this part if necessary """
     
     # NOTE: _reformat_message could double check parse_message and format_to_message integrity
     _format = kwargs['_format'] if '_format' in kwargs else 'auto'
@@ -130,10 +155,10 @@ def _bot_fn_session_state(message, history, *args):
             yield _reformat_message(m, _format=_format), session_state, status
         bot_message = m # for print
 
+    # print(kwargs)
+    # _print_messages(history, message, bot_message, system=kwargs["system_prompt"], variant='secondary')
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
-    print(kwargs)
-    _print_messages(history, message, bot_message, system=kwargs["system_prompt"])
     session_state['previous_message'] = message
 
 bot_fn = _bot_fn_session_state if 'session_state' in {**ATTACHMENTS, **SETTINGS, **PARAMETERS} else _bot_fn

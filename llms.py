@@ -113,10 +113,13 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 def _print_messages(history, message, bot_message, system=None,
-    user_name='user', bot_name='assistant', format='plain'):
+    user_name='user', bot_name='assistant', format='plain', variant='primary', tag=None):
     """history is list of tuple [(user_msg, bot_msg), ...]"""
     prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=format)
-    print(f'{bcolors.OKCYAN}{prompt}{bcolors.OKGREEN}{bot_message}{bcolors.ENDC}')
+    bot_msg_color = {'primary': bcolors.OKGREEN, 'secondary': bcolors.HEADER, 
+            'warning': bcolors.WARNING, 'error': bcolors.FAIL}.get(variant, bcolors.BOLD)
+    tag = f'\n:: {tag}' if tag is not None else ''
+    print(f'{bcolors.OKCYAN}{prompt}{bot_msg_color}{bot_message}{bcolors.WARNING}{tag}{bcolors.ENDC}')
 
 
 ################################################################
@@ -163,36 +166,47 @@ def _random_bot_fn(message, history, **kwargs):
         bot_message = '\n'.join(samples.values())
     else:
         bot_message = random.choice(list(samples.values()))
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages([], message, bot_message)
     return bot_message
 
 def _openai_bot_fn(message, history, **kwargs):
     _kwargs = dict(temperature=kwargs.get('temperature', 0))
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
     import openai
     openai.api_key = os.environ["OPENAI_API_KEY"]
 
     resp = openai.ChatCompletion.create(
-        model=kwargs.get('chat_engine', 'gpt-3.5-turbo'),
+        model=chat_engine,
         messages=_format_messages(history, message, system=system, format='openai_chat'),
         **_kwargs,
     )
-    return resp.choices[0].message.content
+    bot_message = resp.choices[0].message.content
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, tag=f'openai ({chat_engine})')
+    return bot_message
 
 def _openai_langchain_bot_fn(message, history, **kwargs):
     _kwargs = dict(temperature=kwargs.get('temperature', 0))
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
     from langchain.chat_models import ChatOpenAI
-    llm = ChatOpenAI(model=kwargs.get('chat_engine', 'gpt-3.5-turbo'), **_kwargs)
-    return llm(_format_messages(history, message, system=system, format='langchain_chat')).content
+    llm = ChatOpenAI(model=chat_engine, **_kwargs)
+    bot_message = llm(_format_messages(history, message, system=system, format='langchain_chat')).content
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, tag=f'openai_langchain ({chat_engine})')
+    return bot_message
 
 def _openai_stream_bot_fn(message, history, **kwargs):
     _kwargs = dict(temperature=kwargs.get('temperature', 0))
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
     import openai
     openai.api_key = os.environ["OPENAI_API_KEY"]
 
     resp = openai.ChatCompletion.create(
-        model=kwargs.get('chat_engine', 'gpt-3.5-turbo'),
+        model=chat_engine,
         messages=_format_messages(history, message, system=system, format='openai_chat'),
         stream=True,
         **_kwargs,
@@ -203,7 +217,9 @@ def _openai_stream_bot_fn(message, history, **kwargs):
         if 'content' in _resp.choices[0].delta: # last resp delta is empty
             bot_message += _resp.choices[0].delta.content # need to accumulate previous message
         yield bot_message.strip() # accumulated message can easily be postprocessed
-    _print_messages(history, message, bot_message, system=system)
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, tag=f'openai_stream ({chat_engine})')
+    return bot_message
 
 def __hf_helper_fn(chat_engine):
     if chat_engine.startswith('falcon'):
@@ -235,6 +251,9 @@ def _hf_bot_fn(message, history, **kwargs):
     prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
 
     bot_message = client.generate(prompt, **_kwargs).generated_text.strip().split(f'\n{user_name}')[0]
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, 
+                user_name=user_name, bot_name=bot_name, format=_format, tag=f'hf ({chat_engine})')
     return bot_message
 
 def _hf_stream_bot_fn(message, history, **kwargs):
@@ -263,18 +282,23 @@ def _hf_stream_bot_fn(message, history, **kwargs):
             yield bot_message.strip().split(stop_word)[0] # stop word
             if stop_word in bot_message:
                 break
-
     bot_message = bot_message.strip().split(stop_word)[0]
-    _print_messages(history, message, bot_message, system=system, 
-            user_name=user_name, bot_name=bot_name, format=_format)
-
-def _bot_slash_fn(message, history, **kwargs):
-    bot_message = message
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, 
+                user_name=user_name, bot_name=bot_name, format=_format, tag=f'hf_stream ({chat_engine})')
     return bot_message
 
 def _llm_call(message, history, **kwargs):
+    """Call LLM with native engine (OpenAI ChatGPT or HuggingFace TGI).
+
+    kwargs:
+        * chat_engine : for llm model selection
+        * system_prompt : system prompt
+        * verbose : print chat history and bot response
+        * other possible kwargs: temperature, max_tokens, etc.
+    """
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
-    if chat_engine.startswith('gpt'):
+    if chat_engine.startswith('gpt-'):
         bot_message = _openai_bot_fn(message, history, **kwargs)
     elif chat_engine in HF_ENDPOINTS:
         bot_message = _hf_bot_fn(message, history, **kwargs)
@@ -283,6 +307,14 @@ def _llm_call(message, history, **kwargs):
     return bot_message
 
 def _llm_call_stream(message, history, **kwargs):
+    """Call LLM with native engine in streaming mode (OpenAI ChatGPT or HuggingFace TGI).
+
+    kwargs:
+        * chat_engine : for llm model selection
+        * system_prompt : system prompt
+        * verbose : print chat history and bot response
+        * other possible kwargs: temperature, max_tokens, etc.
+    """
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
     if chat_engine.startswith('gpt'):
         bot_message = _openai_stream_bot_fn(message, history, **kwargs)
@@ -338,5 +370,6 @@ def _llm_call_langchain(message, history, **kwargs):
         bot_message = llm(prompt)
     else:
         bot_message = f'ERROR: Invalid chat_engine: {chat_engine}'
-    _print_messages(history, message, bot_message, system=system)
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, tag=f'langchain ({chat_engine})')
     return bot_message
