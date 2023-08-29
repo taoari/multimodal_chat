@@ -116,6 +116,7 @@ def _print_messages(history, message, bot_message, system=None,
     user_name='user', bot_name='assistant', format='plain', variant='primary', tag=None):
     """history is list of tuple [(user_msg, bot_msg), ...]"""
     prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=format)
+    prompt = prompt.replace('</s><s>', '</s>\n<s>') # better print for llama models
     bot_msg_color = {'primary': bcolors.OKGREEN, 'secondary': bcolors.HEADER, 
             'warning': bcolors.WARNING, 'error': bcolors.FAIL}.get(variant, bcolors.BOLD)
     tag = f'\n:: {tag}' if tag is not None else ''

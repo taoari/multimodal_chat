@@ -241,6 +241,7 @@ from llms import _random_bot_fn, _openai_stream_bot_fn, _print_messages
 
 def _langchain_agent_bot_fn(message, history, **kwargs):
     session_state = kwargs['session_state']
+    chat_engine = kwargs.get('chat_engine', "gpt-3.5-turbo-0613")
 
     # TODO: mrkl is shared accross users, need to be in sesson state
     from langchain.agents import initialize_agent, Tool
@@ -248,7 +249,7 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
     from langchain.chat_models import ChatOpenAI
 
     # llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-0613")
-    llm = _get_llm(chat_engine=kwargs.get('chat_engine', "gpt-3.5-turbo-0613"), temperature=0)
+    llm = _get_llm(chat_engine=chat_engine, temperature=0)
     
     from tools.utils import get_tool
     tools = [get_tool(name, llm=llm) for name in kwargs['tools']]
@@ -277,7 +278,7 @@ def _langchain_agent_bot_fn(message, history, **kwargs):
         _msg = msg_dict['text']
     bot_message = mrkl.run(_msg)
     if 'verbose' in kwargs and kwargs['verbose']:
-        _print_messages(history, message, bot_message, variant='secondary')
+        _print_messages(history, message, bot_message, variant='secondary', tag=f'langchain_agent_openai_functions ({chat_engine})')
     return bot_message
 
 def _slash_bot_fn(message, history, **kwargs):
