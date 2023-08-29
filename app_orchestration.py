@@ -1,8 +1,7 @@
 # app.py : Multimodal Chatbot
 import os
-import logging
 import time
-from pprint import pprint
+import logging
 from dotenv import load_dotenv
 import gradio as gr
 
@@ -19,30 +18,20 @@ def print(*args, **kwargs):
     logging.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
 
 ################################################################
-# Global variables
+# Extra loading
 ################################################################
 
-from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream
-from utils import parse_message, format_to_message, get_spinner, _reformat_message, _reformat_history
+from utils import _reformat_message, _reformat_history
+from utils import parse_message, format_to_message, get_spinner
+from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream, _print_messages
 
-AVAILABLE_TOOLS = ['Search', 'OCR', 'Barcode']
-SESSION_STATE = {"vs": {}} # for complex object
 DEBUG = True
+SESSION_STATE = {"vs": {}} # for complex object
+AVAILABLE_TOOLS = ['Search', 'OCR', 'Barcode']
 
-PROMPT_TEMPLATE_QA = """Use the following pieces of context to answer the question at the end.
-{context}
-Question: {question}
-Answer: """
+PROMPT_TEMPLATE_QA = """"Use the following pieces of context and chat history to answer the question.
 
-################
-
-TITLE = "AI Orchestration"
-
-DESCRIPTION = """
-# AI Orchestration
-
-Simply enter text and press ENTER in the textbox to interact with the chatbot.
-"""
+{context}"""
 
 # One can assume that keys of _default_session_state always exist
 _default_session_state = dict(current_file=None, 
@@ -52,6 +41,18 @@ _default_session_state = dict(current_file=None,
         message=None,
         previous_message=None,
    )
+
+################################################################
+# Global variables
+################################################################
+
+TITLE = "AI Orchestration"
+
+DESCRIPTION = """
+# AI Orchestration
+
+Simply enter text and press ENTER in the textbox to interact with the chatbot.
+"""
 
 ATTACHMENTS = {
     'session_state': dict(cls='State', value=_default_session_state),
@@ -102,6 +103,9 @@ def _clear(session_state):
     session_state.update(_default_session_state)
     return session_state
 
+def _generator_prefix(generator, prefix="", surfix=""):
+    return (prefix + _str + surfix for _str in generator)
+
 def _build_vs(fname, chunk_size=0, persist_directory=None, 
             max_pages=0, verbose=False):
     from langchain.document_loaders import PyPDFLoader
@@ -150,7 +154,6 @@ def _build_vs(fname, chunk_size=0, persist_directory=None,
     print(f'vectordb for {fname} done!')
 
     return vectordb
-
 
 def _get_hash(str_or_file, is_file=False):
     import hashlib
@@ -236,9 +239,6 @@ def _load_vs(persist_directory=None):
 # Bot fn
 ################################################################
 
-from utils import _reformat_message, _reformat_history
-from llms import _random_bot_fn, _openai_stream_bot_fn, _print_messages
-
 def _langchain_agent_bot_fn(message, history, **kwargs):
     session_state = kwargs['session_state']
     chat_engine = kwargs.get('chat_engine', "gpt-3.5-turbo-0613")
@@ -302,13 +302,13 @@ def _beautify_status(status):
 def bot_fn(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
+    kwargs['verbose'] = True # auto print llm calls
     session_state = kwargs['session_state']
     if len(history) == 0 or message == '/clear':
         _clear(session_state)
     # unformated LLM history for rich response applications, keep only after latest context switch
     history = _reformat_history(history[session_state['context_switch_at']:])
     plain_message = _reformat_message(message)
-    kwargs['verbose'] = True # auto print llm calls
 
     """ BEGIN: Update only this part if necessary """
 
@@ -348,15 +348,9 @@ def bot_fn(message, history, *args):
                 res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
                 context = '\n\n'.join([doc.page_content for doc in res])
                 session_state['context'] = context
-                if False:
-                    # NOTE: QA without history
-                    prompt = PROMPT_TEMPLATE_QA.format(context=context, question=msg_dict['text'])
-                    bot_message = _llm_call_stream(prompt, [], **kwargs)
-                else:
-                    # NOTE: QA with history
-                    system_prompt = "Use the following pieces of context and chat history to answer the question.\n\n" + context
-                    _kwargs = {'system_prompt': system_prompt, **kwargs}
-                    bot_message = _llm_call_stream(plain_message, history, **_kwargs)
+                system_prompt = PROMPT_TEMPLATE_QA.format(context=context)
+                _kwargs = {**kwargs, 'system_prompt': system_prompt} # overwrite system_prompt
+                bot_message = _llm_call_stream(plain_message, history, **_kwargs)
             else:
                 bot_message = format_to_message(dict(
                         text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
@@ -368,7 +362,8 @@ def bot_fn(message, history, *args):
                 bot_message = _langchain_agent_bot_fn(plain_message, history, **kwargs)
             except Exception as e:
                 print(e)
-                bot_message = _llm_call_stream(plain_message, history, **kwargs)
+                exception_msg = format_to_message({"collapses": [dict(title="Agent Exception", text=str(e), before=True)]})
+                bot_message = _generator_prefix(_llm_call_stream(plain_message, history, **kwargs), prefix=exception_msg)
     
     session_state['message'] = message
     _parameters = {k: v for k,v in kwargs.items() if k not in {'session_state', 'status'}}
@@ -389,8 +384,6 @@ def bot_fn(message, history, *args):
             yield _reformat_message(m, _format=_format), session_state, status
         bot_message = m # for print
 
-    # print(kwargs)
-    # _print_messages(history, message, bot_message, system=kwargs["system_prompt"], variant='secondary')
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     session_state['previous_message'] = message

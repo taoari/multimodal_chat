@@ -1,7 +1,7 @@
 # app.py : Multimodal Chatbot
-import logging
+import os
 import time
-from pprint import pprint
+import logging
 from dotenv import load_dotenv
 import gradio as gr
 
@@ -18,12 +18,24 @@ def print(*args, **kwargs):
     logging.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
 
 ################################################################
-# Global variables
+# Extra loading
 ################################################################
+
+from utils import _reformat_message, _reformat_history
+from llms import _random_bot_fn, _openai_stream_bot_fn
 
 DEBUG = True
 
-################
+# One can assume that keys of _default_session_state always exist
+_default_session_state = dict(
+        context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
+        message=None,
+        previous_message=None,
+    )
+
+################################################################
+# Global variables
+################################################################
 
 TITLE = "Multimodal Chatbot Template"
 
@@ -37,13 +49,6 @@ Markdown description here. Features:
   * Buttons (type in "button")
   * Cards (type in "card")
 """
-
-# One can assume that keys of _default_session_state always exist
-_default_session_state = dict(
-        context_switch_at=0, # history before context_switch_at should be ignored (e.g. upload an image or a file)
-        message=None,
-        previous_message=None,
-    )
 
 ATTACHMENTS = {
     'image': dict(cls='Image', type='filepath', label="Input"), #, source='webcam'),
@@ -89,46 +94,48 @@ def _clear(session_state):
 # Bot fn
 ################################################################
 
-from utils import _reformat_message, _reformat_history
-from llms import _random_bot_fn, _openai_stream_bot_fn, _print_messages
-
 def _echo_bot_fn(message, history, **kwargs):
     return message
 
 def _bot_fn(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
-    history = _reformat_history(history) # unformated history for LLM, for rich response applications
+    kwargs['verbose'] = True # auto print llm calls
+    # history = _reformat_history(history)
+    # plain_message = _reformat_message(message)
 
-    kwargs['chat_engine'] = 'random' if 'chat_engine' not in kwargs or kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
+    AUTOS = {'chat_engine': 'random'}
+    # set param to default value if param is "auto"
+    for param, default_value in AUTOS.items():
+        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
     bot_message = {'random': _random_bot_fn,
         'echo': _echo_bot_fn,
         'gpt-3.5-turbo': _openai_stream_bot_fn,
         }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
+    _format = kwargs['_format'] if '_format' in kwargs else 'auto'
     if isinstance(bot_message, str):
-        yield bot_message
+        yield _reformat_message(bot_message, _format=_format)
     else:
         for m in bot_message:
-            yield m
-        bot_message = m # for print
+            yield _reformat_message(m, _format=_format)
+        # bot_message = m # for print
 
+    print(kwargs)
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
-    print(kwargs)
-    _print_messages(history, message, bot_message, system=kwargs["system_prompt"])
 
 def _bot_fn_session_state(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
+    kwargs['verbose'] = True # auto print llm calls
     session_state = kwargs['session_state']
     if len(history) == 0 or message == '/clear':
         _clear(session_state)
     # unformated LLM history for rich response applications, keep only after latest context switch
     history = _reformat_history(history[session_state['context_switch_at']:])
     plain_message = _reformat_message(message)
-    kwargs['verbose'] = True # auto print llm calls
 
     """ BEGIN: Update only this part if necessary """
 
@@ -158,8 +165,6 @@ def _bot_fn_session_state(message, history, *args):
             yield _reformat_message(m, _format=_format), session_state, status
         bot_message = m # for print
 
-    # print(kwargs)
-    # _print_messages(history, message, bot_message, system=kwargs["system_prompt"], variant='secondary')
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     session_state['previous_message'] = message

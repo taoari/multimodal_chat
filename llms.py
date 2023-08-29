@@ -374,3 +374,85 @@ def _llm_call_langchain(message, history, **kwargs):
     if 'verbose' in kwargs and kwargs['verbose']:
         _print_messages(history, message, bot_message, system=system, tag=f'langchain ({chat_engine})')
     return bot_message
+
+# LangChain Gradio stream
+# https://gist.github.com/mortymike/70711b028311681e5f3c6511031d5d43
+
+from threading import Thread
+from queue import Queue, Empty
+from collections.abc import Generator
+from langchain.callbacks.base import BaseCallbackHandler
+from typing import Any
+
+# Defined a QueueCallback, which takes as a Queue object during initialization. Each new token is pushed to the queue.
+class QueueCallback(BaseCallbackHandler):
+    """Callback handler for streaming LLM responses to a queue."""
+
+    def __init__(self, q):
+        self.q = q
+
+    def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
+        self.q.put(token)
+
+    def on_llm_end(self, *args, **kwargs: Any) -> None:
+        return self.q.empty()
+
+
+# Create a function that will return our generator
+def _stream(input_text, **kwargs) -> Generator:
+
+    # Create a Queue
+    q = Queue()
+    job_done = object()
+
+    llm = _get_llm(**kwargs)
+    llm.streaming = True
+    llm.callbacks = [QueueCallback(q)]
+
+    # Create a funciton to call - this will run in a thread
+    def task():
+        if isinstance(input_text, str):
+            resp = llm.predict(input_text)
+        else:
+            resp = llm(input_text).content
+        q.put(job_done)
+
+    # Create a thread and start the function
+    t = Thread(target=task)
+    t.start()
+
+    content = ""
+
+    # Get each new token from the queue and yield for our generator
+    while True:
+        try:
+            next_token = q.get(True, timeout=1)
+            if next_token is job_done:
+                break
+            content += next_token
+            yield next_token, content
+        except Empty:
+            continue
+
+def _llm_call_stream_langchain(message, history, **kwargs):
+    system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    llm = _get_llm(**kwargs)
+
+    if chat_engine.startswith('gpt'):
+        messages = _format_messages(history, message, system=system, format='langchain_chat')
+        for next_token, partial_message in _stream(messages, **kwargs):
+            yield partial_message
+        bot_message = partial_message
+    elif chat_engine in HF_ENDPOINTS:
+        system, user_name, bot_name, _format = __hf_helper_fn(chat_engine)
+        system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else system
+        prompt = _format_messages(history, message, system=system, user_name=user_name, bot_name=bot_name, format=_format)
+        for next_token, partial_message in _stream(prompt, **kwargs):
+            yield partial_message
+        bot_message = partial_message
+    else:
+        bot_message = f'ERROR: Invalid chat_engine: {chat_engine}'
+    if 'verbose' in kwargs and kwargs['verbose']:
+        _print_messages(history, message, bot_message, system=system, tag=f'langchain_stream ({chat_engine})')
+    return bot_message

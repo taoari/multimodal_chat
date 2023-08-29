@@ -2,7 +2,6 @@
 import os
 import time
 import logging
-from pprint import pprint
 from dotenv import load_dotenv
 import gradio as gr
 
@@ -22,7 +21,9 @@ def print(*args, **kwargs):
 # Extra loading
 ################################################################
 
+from utils import _reformat_message
 from llms import HF_ENDPOINTS
+from llms import _llm_call, _llm_call_stream
 from prompts import PROMPTS, split_prompt
 
 ################################################################
@@ -44,11 +45,13 @@ ATTACHMENTS = {
             info='Set system prompt to act as the specified role.'),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
 }
-    
+
 SETTINGS = {
     'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-16k', 'gpt-4'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
             value='auto', 
             interactive=True, label="Chat engine"),
+    '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
+            interactive=True, label="Bot response format"),
 }
 
 PARAMETERS = {
@@ -66,32 +69,46 @@ KWARGS = {} # use for chatbot additional_inputs, do NOT change
 # utils
 ################################################################
 
-def _create_from_dict(PARAMS):
+def _create_from_dict(PARAMS, tabbed=False):
     params = {}
     for name, kwargs in PARAMS.items():
         cls_ = kwargs['cls']; del kwargs['cls']
-        params[name] = getattr(gr, cls_)(**kwargs)
+        if not tabbed:
+            params[name] = getattr(gr, cls_)(**kwargs)
+        else:
+            tab_name = kwargs['label'] if 'label' in kwargs else name
+            with gr.Tab(tab_name):
+                params[name] = getattr(gr, cls_)(**kwargs)
     return params
 
-from llms import _llm_call, _llm_call_stream, _llm_call_langchain
+################################################################
+# Bot fn
+################################################################
+
 
 def bot_fn(message, history, *args):
     __TIC = time.time()
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
-    kwargs['chat_engine'] = 'gpt-3.5-turbo-16k' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
-    kwargs['verbose'] = True
+    kwargs['verbose'] = True # auto print llm calls
+
+    AUTOS = {'chat_engine': 'gpt-3.5-turbo-16k'}
+    # set param to default value if param is "auto"
+    for param, default_value in AUTOS.items():
+        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
     bot_message = _llm_call_stream(message, history, **kwargs)
     
+    _format = kwargs['_format'] if '_format' in kwargs else 'auto'
     if isinstance(bot_message, str):
-        yield bot_message
+        yield _reformat_message(bot_message, _format=_format)
     else:
         for m in bot_message:
-            yield m
-        # bot_message = m # for printing
+            yield _reformat_message(m, _format=_format)
+        # bot_message = m # for print
+
+    print(kwargs)
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
-    print(kwargs)
 
 ################################################################
 # Gradio app
@@ -103,11 +120,6 @@ def get_demo():
     css="""#chatbot {
 min-height: 600px;
 }"""
-
-    # NOTE: can not be inside another gr.Blocks
-    # _chatbot = gr.Chatbot(elem_id="chatbot", avatar_images = ("assets/user.png", "assets/bot.png"))
-    # _textbox = gr.Textbox(container=False, show_label=False, placeholder="Type a message...", scale=10, elem_id='inputTextBox', min_width=300)
-
     with gr.Blocks(css=css) as demo:
         # title
         gr.HTML(f"<center><h1>{TITLE}</h1></center>")
@@ -115,7 +127,7 @@ min-height: 600px;
         with gr.Accordion("Expand to see Introduction and Usage", open=False):
             gr.Markdown(f"{DESCRIPTION}")
         with gr.Row():
-            # attachements, settings, and parameters
+            # attachments, settings, and parameters
             with gr.Column(scale=1):
                 attachments = _create_from_dict(ATTACHMENTS)
                 with gr.Accordion("Settings", open=False) as settings_accordin:
@@ -127,11 +139,12 @@ min-height: 600px;
                 # chatbot
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
+                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
-                        # additional_outputs=[KWARGS['session_state']] if 'session_state' in KWARGS else None,
-                        # upload_btn=None,
+                        # additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
+                        # upload_btn="📁",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
                 chatbot.chatbot.elem_id = 'chatbot' # for css
@@ -149,7 +162,7 @@ min-height: 600px;
                     )
             # additional handlers
             for name, attach in attachments.items():
-                if hasattr(chatbot, '_upload_fn') and isinstance(attach, gr.Image):
+                if hasattr(chatbot, '_upload_fn') and isinstance(attach, (gr.Image, gr.Audio, gr.Video, gr.File)):
                     attach.change(chatbot._upload_fn,
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
@@ -183,4 +196,4 @@ if __name__ == '__main__':
     demo = get_demo()
     from utils import reload_javascript
     reload_javascript()
-    demo.queue().launch(share=True, server_port=args.port)
+    demo.queue().launch(server_name='0.0.0.0', server_port=args.port)
