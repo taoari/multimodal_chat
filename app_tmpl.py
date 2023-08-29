@@ -128,11 +128,14 @@ def _bot_fn_session_state(message, history, *args):
     # unformated LLM history for rich response applications, keep only after latest context switch
     history = _reformat_history(history[session_state['context_switch_at']:])
     plain_message = _reformat_message(message)
+    kwargs['verbose'] = True # auto print llm calls
 
     """ BEGIN: Update only this part if necessary """
 
-    kwargs['verbose'] = True # auto print llm calls
-    kwargs['chat_engine'] = 'random' if kwargs['chat_engine'] == 'auto' else kwargs['chat_engine']
+    AUTOS = {'chat_engine': 'random'}
+    # set param to default value if param is "auto"
+    for param, default_value in AUTOS.items():
+        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
     bot_message = {'random': _random_bot_fn,
         'echo': _echo_bot_fn,
