@@ -19,8 +19,8 @@ If the input is already in English, simplify reply with the original text. My fi
 PROMPTS["rewrite_professional"] = dict(act="Rewrite professional", prompt="""
 Rewrite the following in a professional manner.
 """)
-PROMPTS["<awesome_prompts>"] = dict(act="<awesome_prompts>", prompt="""""")
-PROMPTS.update({_to_command(prompt['act']): prompt for prompt in dataset['train']})
+PROMPTS["----"] = dict(act="----", prompt='')
+PROMPTS.update(sorted({_to_command(prompt['act']): prompt for prompt in dataset['train']}.items()))
 
 
 def split_prompt(prompt):
