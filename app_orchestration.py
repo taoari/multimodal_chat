@@ -65,7 +65,7 @@ SETTINGS = {
     'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
             value=[t for t in AVAILABLE_TOOLS if t not in {"Search"}],
             interactive=True, label='Tools'),
-    'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4'] + list(HF_ENDPOINTS.keys()),
+    'chat_engine': dict(cls='Dropdown', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4'] + list(HF_ENDPOINTS.keys()),
             value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 

@@ -47,7 +47,7 @@ ATTACHMENTS = {
 }
 
 SETTINGS = {
-    'chat_engine': dict(cls='Radio', choices=['auto', 'gpt-3.5-turbo-16k', 'gpt-4'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
+    'chat_engine': dict(cls='Dropdown', choices=['auto', 'gpt-3.5-turbo-16k', 'gpt-4'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
             value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 

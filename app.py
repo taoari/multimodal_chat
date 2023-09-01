@@ -11,7 +11,7 @@ import app_create_v2
 
 TABS = {
     'AI Chat': app_chat_v3.get_demo,
-    'AI Orchestration (Preview)': app_orchestration.get_demo,
+    'AI Orchestration': app_orchestration.get_demo,
     'AI Create': app_create_v2.get_demo,
     'Template': app_tmpl.get_demo,
 }
