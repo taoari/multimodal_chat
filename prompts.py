@@ -16,8 +16,11 @@ I will speak to you in any language and you will detect the language and transla
 I want you to only reply the translation and nothing else, do not write explanations. \
 If the input is already in English, simplify reply with the original text. My first sentence is "Aloha!".
 """)
-PROMPTS["rewrite_professional"] = dict(act="Rewrite professional", prompt="""
+PROMPTS["professional_rewriter"] = dict(prompt="""
 Rewrite the following in a professional manner.
+""")
+PROMPTS["email_responser"] = dict(prompt="""
+Given the following received email, generate a polite and professional response.
 """)
 PROMPTS["----"] = dict(act="----", prompt='')
 PROMPTS.update(sorted({_to_command(prompt['act']): prompt for prompt in dataset['train']}.items()))
