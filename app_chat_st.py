@@ -1,7 +1,10 @@
 import openai
 import streamlit as st
 
-st.title("ChatGPT-like clone")
+user_avatar = 'assets/user.png'
+assistant_avatar = 'assets/bot.png'
+
+st.title("AI Chat")
 
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
@@ -12,15 +15,15 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
+    with st.chat_message(message["role"], avatar=user_avatar if message["role"] == "user" else assistant_avatar):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("What is up?"):
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=user_avatar):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=assistant_avatar):
         message_placeholder = st.empty()
         full_response = ""
         try:
