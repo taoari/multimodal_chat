@@ -213,13 +213,13 @@ min-height: 600px;
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
                         additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
-                        upload_btn="📁",
+                        upload_btn="📁", audio_btn="🎤",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
                 chatbot.chatbot.elem_id = 'chatbot' # for css
                 chatbot.textbox.elem_id = 'inputTextBox' # for buttons
                 chatbot.chatbot.avatar_images = ("assets/user.png", "assets/bot.png")
-                audio_btn = gr.Button(value="🎤")
+                # audio_btn = gr.Button(value="🎤")
 
                 # examples
                 with gr.Accordion("Examples", open=False) as examples_accordin:
@@ -237,7 +237,7 @@ min-height: 600px;
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
             # KWARGS['audio'].change(transcribe, [KWARGS['audio']], [chatbot.textbox], queue=False, api_name=False)
-            audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
+            chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
 
     return demo
 

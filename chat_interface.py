@@ -69,6 +69,7 @@ class ChatInterface(Blocks):
         css: str | None = None,
         analytics_enabled: bool | None = None,
         upload_btn: str | None | Button = None, # "📁",
+        audio_btn: str | None | Button = None, # "🎤",
         submit_btn: str | None | Button = "Submit",
         stop_btn: str | None | Button = "Stop",
         retry_btn: str | None | Button = "🔄  Retry",
@@ -164,6 +165,18 @@ class ChatInterface(Blocks):
                                     f"The upload_btn parameter must be a gr.UploadButton, string, or None, not {type(upload_btn)}"
                                 )
                         self.buttons.append(upload_btn)
+                        if audio_btn:
+                            if isinstance(audio_btn, Button):
+                                audio_btn.render()
+                            elif isinstance(audio_btn, str):
+                                audio_btn = Button(
+                                    audio_btn, scale=0.1, min_width=0
+                                )
+                            else:
+                                raise ValueError(
+                                    f"The audio_btn parameter must be a gr.Button, string, or None, not {type(audio_btn)}"
+                                )
+                        self.buttons.append(audio_btn)
                         if textbox:
                             textbox.container = False
                             textbox.show_label = False
@@ -228,6 +241,7 @@ class ChatInterface(Blocks):
                     )
                     (
                         self.upload_btn,
+                        self.audio_btn,
                         self.submit_btn,
                         self.stop_btn,
                         self.retry_btn,
@@ -298,6 +312,9 @@ class ChatInterface(Blocks):
                 self._upload_fn, 
                 [self.textbox, self.upload_btn], 
                 [self.textbox], queue=False, api_name='upload')
+        
+        if self.audio_btn:
+            pass # transcribe function is proccessed outside of this code
             
         if self.submit_btn:
             click_event = (
