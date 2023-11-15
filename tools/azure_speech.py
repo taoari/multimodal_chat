@@ -1,7 +1,7 @@
 import os
 import azure.cognitiveservices.speech as speechsdk
 
-def azure_speech_synthesis():
+def speech_synthesis(text=None):
 
     # This example requires environment variables named "SPEECH_KEY" and "SPEECH_REGION"
     speech_config = speechsdk.SpeechConfig(subscription=os.environ.get('SPEECH_KEY'), region=os.environ.get('SPEECH_REGION'))
@@ -12,9 +12,10 @@ def azure_speech_synthesis():
 
     speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
 
-    # Get text from the console and synthesize to the default speaker.
-    print("Enter some text that you want to speak >")
-    text = input()
+    if text is None:
+        # Get text from the console and synthesize to the default speaker.
+        print("Enter some text that you want to speak >")
+        text = input()
 
     speech_synthesis_result = speech_synthesizer.speak_text_async(text).get()
 
@@ -28,7 +29,7 @@ def azure_speech_synthesis():
                 print("Error details: {}".format(cancellation_details.error_details))
                 print("Did you set the speech resource key and region values?")
 
-def azure_speech_recognition():
+def speech_recognition():
     # This example requires environment variables named "SPEECH_KEY" and "SPEECH_REGION"
     speech_config = speechsdk.SpeechConfig(subscription=os.environ.get('SPEECH_KEY'), region=os.environ.get('SPEECH_REGION'))
     speech_config.speech_recognition_language="en-US"
@@ -54,5 +55,5 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
 
     load_dotenv('../.env')  # take environment variables from .env.
-    azure_speech_synthesis()
-    azure_speech_recognition()
+    speech_synthesis()
+    speech_recognition()

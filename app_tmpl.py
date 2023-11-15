@@ -165,6 +165,9 @@ def _bot_fn_session_state(message, history, *args):
             yield _reformat_message(m, _format=_format), session_state, status
         bot_message = m # for print
 
+    from tools.azure_speech import speech_synthesis
+    speech_synthesis(text=bot_message)
+
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     session_state['previous_message'] = message
