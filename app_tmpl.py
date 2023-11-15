@@ -52,6 +52,7 @@ Markdown description here. Features:
 
 ATTACHMENTS = {
     'image': dict(cls='Image', type='filepath', label="Input"), #, source='webcam'),
+    # 'audio': dict(cls='Audio', source='microphone', label="Audio"), # sources=["microphone"], label="Audio"),
     'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
     'status': dict(cls='JSON', label='Status info'),
 }
@@ -89,6 +90,10 @@ def _clear(session_state):
     session_state.clear()
     session_state.update(_default_session_state)
     return session_state
+
+def transcribe(audio):
+    from tools.azure_speech import speech_recognition
+    return speech_recognition(audio)
 
 ################################################################
 # Bot fn
@@ -214,6 +219,7 @@ min-height: 600px;
                 chatbot.chatbot.elem_id = 'chatbot' # for css
                 chatbot.textbox.elem_id = 'inputTextBox' # for buttons
                 chatbot.chatbot.avatar_images = ("assets/user.png", "assets/bot.png")
+                audio_btn = gr.Button(value="🎤")
 
                 # examples
                 with gr.Accordion("Examples", open=False) as examples_accordin:
@@ -226,10 +232,13 @@ min-height: 600px;
                     )
             # additional handlers
             for name, attach in attachments.items():
-                if hasattr(chatbot, '_upload_fn') and isinstance(attach, (gr.Image, gr.Audio, gr.Video, gr.File)):
+                if hasattr(chatbot, '_upload_fn') and isinstance(attach, (gr.Image, gr.Video, gr.File)):
                     attach.change(chatbot._upload_fn,
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
+            # KWARGS['audio'].change(transcribe, [KWARGS['audio']], [chatbot.textbox], queue=False, api_name=False)
+            audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
+
     return demo
 
 def parse_args():
