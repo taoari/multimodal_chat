@@ -209,8 +209,8 @@ min-height: 600px;
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
                 KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
-                # import chat_interface
-                chatbot = gr.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
+                import chat_interface
+                chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
                         # additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
                         # upload_btn="📁", audio_btn="🎤",
