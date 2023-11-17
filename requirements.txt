@@ -7,7 +7,7 @@ opencv-python
 azure-cognitiveservices-speech
 
 # for llm
-openai
+openai==0.28
 text_generation
 huggingface_hub
 langchain

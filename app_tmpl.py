@@ -58,7 +58,7 @@ ATTACHMENTS = {
 }
 
 SETTINGS = {
-    'session_state': dict(cls='State', value=_default_session_state),
+    # 'session_state': dict(cls='State', value=_default_session_state),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
@@ -209,11 +209,11 @@ min-height: 600px;
                 global KWARGS
                 KWARGS = {**attachments, **settings, **parameters}
                 KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
-                import chat_interface
-                chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
+                # import chat_interface
+                chatbot = gr.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
-                        additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
-                        upload_btn="📁", audio_btn="🎤",
+                        # additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
+                        # upload_btn="📁", audio_btn="🎤",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
                 chatbot.chatbot.elem_id = 'chatbot' # for css
@@ -237,7 +237,8 @@ min-height: 600px;
                         [chatbot.textbox, attach], 
                         [chatbot.textbox], queue=False, api_name=False)
             # KWARGS['audio'].change(transcribe, [KWARGS['audio']], [chatbot.textbox], queue=False, api_name=False)
-            chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
+            if hasattr(chatbot, 'audio_btn'):
+                chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
 
     return demo
 
