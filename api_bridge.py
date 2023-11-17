@@ -2,20 +2,20 @@ from gradio_client import Client
 
 def _upload(client, fname, message=""):
     result = client.predict(
-                    message,	# str in 'Message' Textbox component
-                    fname,	# str (filepath or URL to file) in '📁' Uploadbutton component
-                    api_name="/upload"
+            message,	# str in 'Message' Textbox component
+            fname,	# str (filepath or URL to file) in '📁' Uploadbutton component
+            api_name="/upload"
     )
     return result
 
 def _chat(client, message, chat_engine="auto"):
     result = client.predict(
-                    message,	# str in 'Message' Textbox component
-                    None,	# str (filepath or URL to image) in 'Input' Image component
-                    "",	# str in 'System prompt' Textbox component
-                    chat_engine,	# str in 'Chat engine' Radio component
-                    "auto",	# str in 'Bot response format' Radio component
-                    api_name="/chat"
+            message,	# str  in 'Message' Textbox component
+            None,	# filepath  in 'Input' Image component
+            "",	# str  in 'System prompt' Textbox component
+            chat_engine,	# Literal[auto, random, echo, gpt-3.5-turbo]  in 'Chat engine' Radio component
+            "auto",	# Literal[auto, html, plain, json]  in 'Bot response format' Radio component
+            api_name="/chat"
     )
     return result
 

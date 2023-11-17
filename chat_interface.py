@@ -477,9 +477,9 @@ class ChatInterface(Blocks):
             response = await anyio.to_thread.run_sync(
                 self.fn, *inputs, limiter=self.limiter
             )
-
-        history.append([message, response])
-        return history, history
+        return self.__additional_outputs_return(message, history, response, mode='submit')
+        # history.append([message, response])
+        # return history, history
 
     async def _stream_fn(
         self,
@@ -502,14 +502,17 @@ class ChatInterface(Blocks):
             generator = SyncToAsyncIterator(generator, self.limiter)
         try:
             first_response = await async_iteration(generator)
-            update = history + [[message, first_response]]
-            yield update, update
+            yield self.__additional_outputs_return(message, history, first_response, mode='stream')
+            # update = history + [[message, first_response]]
+            # yield update, update
         except StopIteration:
-            update = history + [[message, None]]
-            yield update, update
+            yield self.__additional_outputs_return(message, history, None, mode='stream')
+            # update = history + [[message, None]]
+            # yield update, update
         async for response in generator:
-            update = history + [[message, response]]
-            yield update, update
+            yield self.__additional_outputs_return(message, history, response, mode='stream')
+            # update = history + [[message, response]]
+            # yield update, update
 
     async def _api_submit_fn(
         self, message: str, history: list[list[str | None]], request: Request, *args
@@ -524,8 +527,9 @@ class ChatInterface(Blocks):
             response = await anyio.to_thread.run_sync(
                 self.fn, *inputs, limiter=self.limiter
             )
-        history.append([message, response])
-        return response, history
+        return self.__additional_outputs_return(message, history, response, mode='api_submit')
+        # history.append([message, response])
+        # return response, history
 
     async def _api_stream_fn(
         self, message: str, history: list[list[str | None]], request: Request, *args
@@ -543,11 +547,14 @@ class ChatInterface(Blocks):
             generator = SyncToAsyncIterator(generator, self.limiter)
         try:
             first_response = await async_iteration(generator)
-            yield first_response, history + [[message, first_response]]
+            yield self.__additional_outputs_return(message, history, first_response, mode='api_stream')
+            # yield first_response, history + [[message, first_response]]
         except StopIteration:
-            yield None, history + [[message, None]]
+            yield self.__additional_outputs_return(message, history, None, mode='api_stream')
+            # yield None, history + [[message, None]]
         async for response in generator:
-            yield response, history + [[message, response]]
+            yield self.__additional_outputs_return(message, history, response, mode='api_stream')
+            # yield response, history + [[message, response]]
 
     async def _examples_fn(self, message: str, *args) -> list[list[str | None]]:
         inputs, _, _ = special_args(self.fn, inputs=[message, [], *args], request=None)

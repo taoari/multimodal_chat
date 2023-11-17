@@ -58,7 +58,7 @@ ATTACHMENTS = {
 }
 
 SETTINGS = {
-    # 'session_state': dict(cls='State', value=_default_session_state),
+    'session_state': dict(cls='State', value=_default_session_state),
     'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'echo', 'gpt-3.5-turbo'], value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
@@ -215,7 +215,7 @@ min-height: 600px;
                 import chat_interface
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
-                        # additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
+                        additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
                         upload_btn="📁", audio_btn="🎤",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
