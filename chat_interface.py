@@ -15,6 +15,7 @@ from gradio_client.documentation import document, set_documentation_group
 from gradio.blocks import Blocks
 from gradio.components import (
     Button,
+    UploadButton,
     Chatbot,
     Component,
     Markdown,
@@ -61,6 +62,7 @@ class ChatInterface(Blocks):
         textbox: Textbox | None = None,
         additional_inputs: str | Component | list[str | Component] | None = None,
         additional_inputs_accordion_name: str = "Additional Inputs",
+        additional_outputs: str | Component | list[str | Component] | None = None,
         examples: list[str] | None = None,
         cache_examples: bool | None = None,
         title: str | None = None,
@@ -68,6 +70,8 @@ class ChatInterface(Blocks):
         theme: Theme | str | None = None,
         css: str | None = None,
         analytics_enabled: bool | None = None,
+        upload_btn: str | None | Button = None, # "📁",
+        audio_btn: str | None | Button = None, # "🎤",
         submit_btn: str | None | Button = "Submit",
         stop_btn: str | None | Button = "Stop",
         retry_btn: str | None | Button = "🔄  Retry",
@@ -126,6 +130,15 @@ class ChatInterface(Blocks):
         else:
             self.additional_inputs = []
         self.additional_inputs_accordion_name = additional_inputs_accordion_name
+        
+        if additional_outputs:
+            if not isinstance(additional_outputs, list):
+                additional_outputs = [additional_outputs]
+            self.additional_outputs = [
+                get_component_instance(i) for i in additional_outputs  # type: ignore
+            ]
+        else:
+            self.additional_outputs = []
 
         with self:
             if title:
@@ -143,6 +156,30 @@ class ChatInterface(Blocks):
 
                 with Group():
                     with Row():
+                        if upload_btn:
+                            if isinstance(upload_btn, UploadButton):
+                                upload_btn.render()
+                            elif isinstance(upload_btn, str):
+                                upload_btn = UploadButton(
+                                    upload_btn, scale=0.1, min_width=0
+                                )
+                            else:
+                                raise ValueError(
+                                    f"The upload_btn parameter must be a gr.UploadButton, string, or None, not {type(upload_btn)}"
+                                )
+                        self.buttons.append(upload_btn)
+                        if audio_btn:
+                            if isinstance(audio_btn, Button):
+                                audio_btn.render()
+                            elif isinstance(audio_btn, str):
+                                audio_btn = Button(
+                                    audio_btn, scale=0.1, min_width=0
+                                )
+                            else:
+                                raise ValueError(
+                                    f"The audio_btn parameter must be a gr.Button, string, or None, not {type(audio_btn)}"
+                                )
+                        self.buttons.append(audio_btn)
                         if textbox:
                             textbox.container = False
                             textbox.show_label = False
@@ -208,6 +245,8 @@ class ChatInterface(Blocks):
                         label="Response", visible=False
                     )
                     (
+                        self.upload_btn,
+                        self.audio_btn,
                         self.submit_btn,
                         self.stop_btn,
                         self.retry_btn,
@@ -275,11 +314,20 @@ class ChatInterface(Blocks):
             .then(
                 submit_fn,
                 [self.saved_input, self.chatbot_state] + self.additional_inputs,
-                [self.chatbot, self.chatbot_state],
+                [self.chatbot, self.chatbot_state] + self.additional_outputs,
                 api_name=False,
             )
         )
         self._setup_stop_events(submit_triggers, submit_event)
+
+        if self.upload_btn:
+            self.upload_btn.upload(
+                self._upload_fn, 
+                [self.textbox, self.upload_btn], 
+                [self.textbox], queue=False, api_name='upload')
+        
+        if self.audio_btn:
+            pass # transcribe function is proccessed outside of this code
 
         if self.retry_btn:
             retry_event = (
@@ -300,7 +348,7 @@ class ChatInterface(Blocks):
                 .then(
                     submit_fn,
                     [self.saved_input, self.chatbot_state] + self.additional_inputs,
-                    [self.chatbot, self.chatbot_state],
+                    [self.chatbot, self.chatbot_state] + self.additional_outputs,
                     api_name=False,
                 )
             )
@@ -396,6 +444,21 @@ class ChatInterface(Blocks):
         history.append([message, None])
         return history, history
 
+    def __additional_outputs_return(self, message, history, response, mode='submit'):
+        
+        response, additional = (response[0], response[1:]) if len(self.additional_outputs) > 0 else (response, tuple())
+
+        if mode in ['submit', 'api_submit']:
+            history.append([message, response])
+            return (history, history) + additional
+        elif mode == 'stream':
+            update = history + [[message, response]]
+            return (update, update) + additional
+        elif mode == 'api_stream':
+            return (response, history + [[message, response]]) + additional
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
+    
     async def _submit_fn(
         self,
         message: str,
@@ -522,3 +585,19 @@ class ChatInterface(Blocks):
         except IndexError:
             message = ""
         return history, message or "", history
+    
+    def _upload_fn(self, msg, filepath_or_filename):
+        if filepath_or_filename is None:
+            return msg
+        filename = filepath_or_filename.name if hasattr(filepath_or_filename, 'name') else filepath_or_filename
+        import os, mimetypes
+        mtype = mimetypes.guess_type(filename)[0]
+        if mtype.startswith('image'):
+            msg += f'<img src="\\file={filename}" alt="{os.path.basename(filename)}"/>'
+        elif mtype.startswith('audio'):
+            msg += f'<audio controls><source src="\\file={filename}">{os.path.basename(filename)}</audio>'
+        elif mtype.startswith('video'):
+            msg += f'<video controls><source src="\\file={filename}">{os.path.basename(filename)}</video>'
+        else:
+            msg += f'<a href="\\file={filename}">📁 {os.path.basename(filename)}</a>'
+        return msg

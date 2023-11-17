@@ -125,11 +125,14 @@ def _bot_fn(message, history, *args):
     else:
         for m in bot_message:
             yield _reformat_message(m, _format=_format)
-        # bot_message = m # for print
+        bot_message = m # for print
 
     print(kwargs)
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
+
+    from tools.azure_speech import speech_synthesis
+    speech_synthesis(text=_reformat_message(bot_message, _format='plain'))
 
 def _bot_fn_session_state(message, history, *args):
     __TIC = time.time()
@@ -170,12 +173,12 @@ def _bot_fn_session_state(message, history, *args):
             yield _reformat_message(m, _format=_format), session_state, status
         bot_message = m # for print
 
-    from tools.azure_speech import speech_synthesis
-    speech_synthesis(text=bot_message)
-
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')
     session_state['previous_message'] = message
+
+    from tools.azure_speech import speech_synthesis
+    speech_synthesis(text=_reformat_message(bot_message, _format='plain'))
 
 bot_fn = _bot_fn_session_state if 'session_state' in {**ATTACHMENTS, **SETTINGS, **PARAMETERS} else _bot_fn
 
@@ -213,7 +216,7 @@ min-height: 600px;
                 chatbot = chat_interface.ChatInterface(bot_fn, # chatbot=_chatbot, textbox=_textbox,
                         additional_inputs=list(KWARGS.values()),
                         # additional_outputs=[KWARGS['session_state'], attachments['status']] if 'session_state' in KWARGS else None,
-                        # upload_btn="📁", audio_btn="🎤",
+                        upload_btn="📁", audio_btn="🎤",
                         retry_btn="Retry", undo_btn="Undo", clear_btn="Clear",
                     )
                 chatbot.chatbot.elem_id = 'chatbot' # for css
