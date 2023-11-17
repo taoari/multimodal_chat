@@ -1,7 +1,10 @@
-gradio
+gradio<4.0
 python-dotenv
 bs4
 opencv-python
+
+# for Azure
+azure-cognitiveservices-speech
 
 # for llm
 openai

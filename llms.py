@@ -1,11 +1,8 @@
 # app.py : Multimodal Chatbot
-import gradio as gr
+import os
 import random
 from pprint import pprint
 from dotenv import load_dotenv
-import os
-import json, requests
-from langchain.chat_models import ChatOpenAI
 
 from utils import parse_message, format_to_message
 
