@@ -147,6 +147,11 @@ def format_to_message(res, _format='html'):
 
         msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)]).strip()
         # ignore buttons and collapses
+
+    elif _format == 'speech':
+        msg = res["text"] if "text" in res else ""
+        # only text, ignore files, cards, buttons and collapses
+        
     elif _format == 'json':
         import json
         msg = json.dumps(res, indent=2)

@@ -63,6 +63,8 @@ SETTINGS = {
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
             interactive=True, label="Bot response format"),
+    'speech_synthesis': dict(cls='Checkbox', value=False, 
+            interactive=True, label="Speech Synthesis"),
 }
 
 PARAMETERS = {
@@ -92,8 +94,11 @@ def _clear(session_state):
     return session_state
 
 def transcribe(audio):
-    from tools.azure_speech import speech_recognition
-    return speech_recognition(audio)
+    try:
+        from tools.azure_speech import speech_recognition
+        return speech_recognition(audio)
+    except Exception as e:
+        return f"Microphone is not supported: {e}"
 
 ################################################################
 # Bot fn
@@ -170,8 +175,12 @@ def _bot_fn_session_state(message, history, *args):
             yield _reformat_message(m, _format=_format), session_state, status
         bot_message = m # for print
 
-    from tools.azure_speech import speech_synthesis
-    speech_synthesis(text=bot_message)
+    if kwargs.get('speech_synthesis', False):
+        try:
+            from tools.azure_speech import speech_synthesis
+            speech_synthesis(text=_reformat_message(bot_message, _format='speech'))
+        except Exception as e:
+            print(f"Speaker is not supported: {e}")
 
     __TOC = time.time()
     print(f'Elapsed time: {__TOC-__TIC}')

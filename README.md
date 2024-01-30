@@ -14,8 +14,8 @@ OPENAI_API_KEY=<openai_api_key>
 * Setup a conda environment and run
 
 ```
-conda create -n multimodal_chat python=3.10
-conda activate multimodal_chat
+conda create -n mmchat python=3.10
+conda activate mmchat
 
 pip install -r requirement.txt
 python app.py
