@@ -11,6 +11,7 @@ openai==0.28
 text_generation
 huggingface_hub
 langchain
+tiktoken
 
 # for llm tools
 google-search-results
