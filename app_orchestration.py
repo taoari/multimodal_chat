@@ -4,6 +4,7 @@ import time
 import logging
 from dotenv import load_dotenv
 import gradio as gr
+from jinja2 import Template
 
 ################################################################
 # Load .env and logging
@@ -23,15 +24,25 @@ def print(*args, **kwargs):
 
 from utils import _reformat_message, _reformat_history
 from utils import parse_message, format_to_message, get_spinner
-from llms import HF_ENDPOINTS, _get_llm, _llm_call_langchain, _llm_call_stream, _print_messages
+from llms import HF_ENDPOINTS, _get_llm, _llm_call, _llm_call_stream, _print_messages
+from vectorstore import _get_hash, _build_vs_dedup, _build_vs_collection
 
 DEBUG = True
-SESSION_STATE = {"vs": {}} # for complex object
+GLOBAL_CACHE = {"vs": {}} # for complex object
 AVAILABLE_TOOLS = ['Search', 'OCR', 'Barcode']
 
 PROMPT_TEMPLATE_QA = """"Use the following pieces of context and chat history to answer the question.
 
 {context}"""
+
+PROMPT_TEMPLATE_QA_JINJA2 = """Use the following pieces of context and chat history to answer the question.
+
+{% for doc in docs %}
+
+
+    {{ doc.page_content }}
+{% endfor %}
+"""
 
 # One can assume that keys of _default_session_state always exist
 _default_session_state = dict(current_file=None, 
@@ -57,27 +68,36 @@ Simply enter text and press ENTER in the textbox to interact with the chatbot.
 ATTACHMENTS = {
     'session_state': dict(cls='State', value=_default_session_state),
     # 'image': dict(cls='Image', type='filepath'), #, source='webcam'),
-    # 'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
+    'system_prompt': dict(cls='Textbox', interactive=True, lines=10, label="System prompt", 
+            value=PROMPT_TEMPLATE_QA_JINJA2,
+            info="Jinja2 template syntax. Refer to https://atufashireen.medium.com/creating-templates-with-jinja-in-python-3ff3b87d6740 for a quick intro for advanced usage."),
     'status': dict(cls='JSON', label='Status info'),
 }
 
 SETTINGS = {
     'tools': dict(cls='CheckboxGroup', choices=AVAILABLE_TOOLS, 
-            value=[t for t in AVAILABLE_TOOLS if t not in {"Search"}],
+            value=[], # [t for t in AVAILABLE_TOOLS if t not in {"Search"}],
             interactive=True, label='Tools'),
-    'chat_engine': dict(cls='Dropdown', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4'] + list(HF_ENDPOINTS.keys()),
-            value='auto', 
+    'chat_engine': dict(cls='Dropdown', choices=['auto', 'gpt-3.5-turbo-0613', 'gpt-4', 'gpt-4-1106-preview'] + list(HF_ENDPOINTS.keys()),
+            value='auto',
             interactive=True, label="Chat engine"),
+    'with_memory': dict(cls='Checkbox', value=False, interactive=True, label='With memory'),
+    'with_score': dict(cls='Checkbox', value=True, interactive=True, label='With score'),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
             interactive=True, label="Bot response format"),
 }
 
 PARAMETERS = {
     'qa_separator': dict(cls='Markdown', value="**Document QA parameters**"),
-    'max_pages': dict(cls='Slider', minimum=0, maximum=16, value=8, step=1, 
-            interactive=True, label="Max pages", info="Max pages to be processed (0 to process all)."),
+    # 'max_pages': dict(cls='Slider', minimum=0, maximum=16, value=8, step=1, 
+    #         interactive=True, label="Max pages", info="Max pages to be processed (0 to process all)."),
+    'collection': dict(cls='Dropdown', choices=['none', 'default_collection'],
+            value='none',
+            interactive=True, label="Collection"),
     'query_k': dict(cls='Slider', minimum=1, maximum=10, value=2, step=1, 
-            interactive=True, label="Query k", info="Increase for better QA results."),
+            interactive=True, label="Query k", info="Increase for better QA results. If error occurs (retrieved doc exceeds LLM context length), reduce its value."),
+    # 'show_citations': dict(cls='Checkbox', value=False, interactive=True, label='Show citations (Experimental)'),
+
 }
     
 KWARGS = {} # use for chatbot additional_inputs, do NOT change
@@ -106,134 +126,6 @@ def _clear(session_state):
 def _generator_prefix(generator, prefix="", surfix=""):
     return (prefix + _str + surfix for _str in generator)
 
-def _build_vs(fname, chunk_size=0, persist_directory=None, 
-            max_pages=0, verbose=False):
-    from langchain.document_loaders import PyPDFLoader
-    loader = PyPDFLoader(fname)
-    pages = loader.load()
-
-    print(f'len(pages) = {len(pages)}')
-
-    if chunk_size > 0:
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-        r_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=0,
-            separators=["\n\n", "\n", "(?<=\. )", " ", ""]
-        )
-        docs = r_splitter.split_documents(pages)
-    else:
-        docs = pages
-
-    print(f'len(docs) = {len(docs)}')
-
-    if max_pages > 0:
-        docs = docs[:max_pages]
-        print(f'len(docs) for vs = {len(docs)}')
-
-    from langchain.embeddings import HuggingFaceEmbeddings
-    embedding = HuggingFaceEmbeddings()
-
-    from langchain.vectorstores import Chroma
-
-    # NOTE: Chroma.from_documents auto combines all docs, must delete the db first
-    vectordb = Chroma(
-        embedding_function=embedding,
-        persist_directory=persist_directory
-    )
-    vectordb.delete_collection()
-
-    vectordb = Chroma.from_documents(
-        documents=docs,
-        embedding=embedding,
-        persist_directory=persist_directory
-    )
-    if persist_directory is not None:
-        vectordb.persist()
-    print('vectordb count {}'.format(vectordb._collection.count()))
-    print(f'vectordb for {fname} done!')
-
-    return vectordb
-
-def _get_hash(str_or_file, is_file=False):
-    import hashlib
-    if not is_file:
-        return hashlib.md5(str_or_file.encode('utf8')).hexdigest()
-    else:
-        with open(str_or_file, "rb") as f:
-            file_hash = hashlib.md5()
-            while chunk := f.read(8192):
-                file_hash.update(chunk)
-        return file_hash.hexdigest()
-
-
-def _build_vs_v2(fname, chunk_size=0, persist_directory=None, 
-            max_pages=0, verbose=False):
-    """Each file per collection and deduplicated."""
-
-    from langchain.document_loaders import PyPDFLoader
-    loader = PyPDFLoader(fname)
-    pages = loader.load()
-
-    print(f'len(pages) = {len(pages)}')
-
-    if chunk_size > 0:
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-        r_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=0,
-            separators=["\n\n", "\n", "(?<=\. )", " ", ""]
-        )
-        docs = r_splitter.split_documents(pages)
-    else:
-        docs = pages
-
-    print(f'len(docs) = {len(docs)}')
-
-    if max_pages > 0:
-        docs = docs[:max_pages]
-        print(f'len(docs) for vs = {len(docs)}')
-
-    from langchain.embeddings import HuggingFaceEmbeddings
-    embedding = HuggingFaceEmbeddings()
-
-    from langchain.vectorstores import Chroma
-
-    collection_name = _get_hash(fname, is_file=True)
-    ids = [_get_hash(p.page_content) for p in docs]
-
-    vectordb = Chroma(
-        collection_name=collection_name,
-        embedding_function=embedding,
-        persist_directory=persist_directory
-    )
-    print(f"vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
-    existing_ids = set(vectordb.get()['ids'])
-    docs_dedup = {_id: doc for _id, doc in zip(ids, docs) if _id not in existing_ids}
-
-    if len(docs_dedup)  > 0:
-        vectordb = Chroma.from_documents(
-            documents=list(docs_dedup.values()),
-            ids=list(docs_dedup.keys()),
-            collection_name=collection_name,
-            embedding=embedding,
-            persist_directory=persist_directory
-        )
-    if persist_directory is not None:
-        vectordb.persist()
-    print(f"updated vector db {vectordb._collection.name} has {vectordb._collection.count()} records: {fname}")
-    return vectordb
-
-def _load_vs(persist_directory=None):
-    from langchain.embeddings import HuggingFaceEmbeddings
-    embedding = HuggingFaceEmbeddings()
-
-    from langchain.vectorstores import Chroma
-    vectordb = Chroma(
-        embedding_function=embedding,
-        persist_directory=persist_directory
-    )
-    return vectordb
 
 ################################################################
 # Bot fn
@@ -289,15 +181,54 @@ def _slash_bot_fn(message, history, **kwargs):
 def _is_document_qa(session_state):
     # TODO: might cause bug with Undo
     cond1 = 'current_file' in session_state and session_state['current_file'] is not None and session_state['current_file'].endswith('.pdf')
-    cond2 = 'vs' in SESSION_STATE and 'current_vs' in session_state and session_state['current_vs'] in SESSION_STATE['vs']
+    cond2 = 'vs' in GLOBAL_CACHE and 'current_vs' in session_state and session_state['current_vs'] in GLOBAL_CACHE['vs']
     return cond1 and cond2
 
 def _beautify_status(status):
-    max_len = 100
+    max_len = 500
     if 'context' in status and status['context'] is not None and len(status['context']) >= max_len:
         status['context'] = status['context'][:max_len] + ' ...(truncated)'
 
     return status
+
+def _format_sources(docs, scores=None):
+    if scores is None:
+        files = ['{}#page={}'.format(doc.metadata['source'], doc.metadata['page'] + 1) for doc in docs]
+        return "\n\n{}".format(format_to_message(dict(text="**Sources**", files=files)))
+    else:
+        # has to use HTML to format
+        res = '<br /> <b>Sources</b> <br />'
+        for doc, score in zip(docs, scores):
+            # <a href="\file=data/default_collection/days_of_supply_vf.pdf#page=3" target="_blank">📁 days_of_supply_vf.pdf#page=3</a>
+            _f = '{}#page={}'.format(doc.metadata['source'], doc.metadata['page'] + 1)
+            res += f'<a href="\\file={_f}" target="_blank">📁 {os.path.split(_f)[-1]}</a> <span class="badge badge-info text-black">score: {score:.2f}</span> <br />'
+        return res
+        
+
+def prebuild_vs():
+    GLOBAL_CACHE['vs']['default_collection'] = _build_vs_collection('data/default_collection', 'default_collection')
+
+def _custom_bot_fn(message, history, **kwargs):
+    """
+    Args
+    ======
+
+    message: user input (Str)
+        plain text or html
+    history: chat history (List[Tuple[Str, Str]])
+        [(user, bot), (user, bot), ...]
+    kwargs: kwargs defined in ATTACHMENTS, SETTINGS, or PARAMETERS (Dict)
+        e.g. chat_engine, session_state
+
+    Returns
+    =======
+    
+    bot_message: bot response (Str or Generator)
+        generator response enables streaming support
+    """
+    bot_message = _llm_call(message.removeprefix('/gpt '), history, chat_engine='gpt-3.5-turbo', temperature=0)
+    # bot_message = _llm_call_stream(message, history, **kwargs)
+    return bot_message
 
 def bot_fn(message, history, *args):
     __TIC = time.time()
@@ -307,18 +238,21 @@ def bot_fn(message, history, *args):
     if len(history) == 0 or message == '/clear':
         _clear(session_state)
     # unformated LLM history for rich response applications, keep only after latest context switch
-    history = _reformat_history(history[session_state['context_switch_at']:])
+    history = _reformat_history(history[session_state['context_switch_at']:]) if kwargs['with_memory'] else []
     plain_message = _reformat_message(message)
 
     """ BEGIN: Update only this part if necessary """
 
     AUTOS = {'chat_engine': 'gpt-3.5-turbo-0613'}
+
     # set param to default value if param is "auto"
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
     # slash cmd
-    if message.startswith('/'):
+    if message.startswith('/gpt '):
+        bot_message = _custom_bot_fn(message, history, **kwargs)
+    elif message.startswith('/'):
         bot_message = _slash_bot_fn(message, history, **kwargs)
     else:
         # image or file uploaded
@@ -337,25 +271,69 @@ def bot_fn(message, history, *args):
                 session_state['current_vs'] = _get_hash(fname, is_file=True)
                 session_state['context_switch_at'] = len(history)
                 yield get_spinner() + f"Building vector store for **{os.path.basename(fname)}**, please be patient.", session_state, session_state
-                vs = _build_vs_v2(fname, max_pages=kwargs.get('max_pages', 0))
-                SESSION_STATE['vs'][session_state['current_vs']] = vs
+                vs = _build_vs_dedup(fname, max_pages=kwargs.get('max_pages', 0))
+                GLOBAL_CACHE['vs'][session_state['current_vs']] = vs
 
         # document QA
-        if _is_document_qa(session_state):
+        if kwargs['collection'] == 'default_collection':
+            # Document QA for a folder
+            if  msg_dict['text']:
+                vectordb = GLOBAL_CACHE['vs'][kwargs['collection']]
+
+                # get docs and scores from vectordb similarity search
+                if not kwargs['with_score']:
+                    docs = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
+                    scores = None
+                else:
+                    res = vectordb.similarity_search_with_score(msg_dict['text'], k=kwargs.get('query_k', 3))
+                    docs = [_r[0] for _r in res] # compatible with similarity_search format
+                    scores = [1.0 - _r[1] for _r in res] # extract scores
+
+                # custom document qa system prompt
+                if kwargs['system_prompt']:
+                    system_prompt = Template(kwargs['system_prompt']).render(docs=docs)
+                    session_state['context'] = system_prompt
+                else:
+                    context = '\n\n'.join([doc.page_content for doc in docs])
+                    session_state['context'] = context
+                    system_prompt = PROMPT_TEMPLATE_QA.format(context=context)
+
+                # llm call
+                _kwargs = {**kwargs, 'system_prompt': system_prompt, 'max_tokens': 1024} # overwrite system_prompt
+                bot_message = _llm_call_stream(plain_message, history, **_kwargs)
+                bot_message = _generator_prefix(bot_message, surfix=_format_sources(docs, scores))
+        elif _is_document_qa(session_state):
             # Document QA if a PDF file is uploaded
             if  msg_dict['text']:
-                vectordb = SESSION_STATE['vs'][session_state['current_vs']]
-                res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
-                context = '\n\n'.join([doc.page_content for doc in res])
-                session_state['context'] = context
-                system_prompt = PROMPT_TEMPLATE_QA.format(context=context)
-                _kwargs = {**kwargs, 'system_prompt': system_prompt} # overwrite system_prompt
-                bot_message = _llm_call_stream(plain_message, history, **_kwargs)
+                # if not kwargs['show_citations']:
+                    vectordb = GLOBAL_CACHE['vs'][session_state['current_vs']]
+                    res = vectordb.similarity_search(msg_dict['text'], k=kwargs.get('query_k', 3))
+                    context = '\n\n'.join([doc.page_content for doc in res])
+                    session_state['context'] = context
+                    system_prompt = PROMPT_TEMPLATE_QA.format(context=context)
+                    _kwargs = {**kwargs, 'system_prompt': system_prompt} # overwrite system_prompt
+                    # bot_message = _llm_call_stream(plain_message, history, **_kwargs)
+                    bot_message = _llm_call(plain_message, history, **_kwargs) + _format_sources(res)
+                # else:
+                #     llm = _get_llm(chat_engine=kwargs['chat_engine'], temperature=0)
+                #     vectordb = SESSION_STATE['vs'][session_state['current_vs']]
+
+                #     from langchain.chains import RetrievalQAWithSourcesChain
+                #     from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+
+                #     qa_chain = load_qa_with_sources_chain(llm, chain_type="stuff")
+                #     retriever = vectordb.as_retriever()
+                #     qa = RetrievalQAWithSourcesChain(combine_documents_chain=qa_chain, retriever=retriever)
+                #     response = qa({"question": plain_message})
+                #     bot_message = str(response)
+
             else:
                 bot_message = format_to_message(dict(
                         text=f"You have uploaded {os.path.basename(session_state['current_file'])}. How can I help you today?",
                         buttons=[dict(text='Summarize', value="Summarize the text.")],
                     ))
+        elif len(kwargs['tools']) == 0:
+            bot_message = _llm_call_stream(plain_message, history, **kwargs)
         else:
             # agent and fallback
             try:
@@ -367,8 +345,8 @@ def bot_fn(message, history, *args):
     
     session_state['message'] = message
     _parameters = {k: v for k,v in kwargs.items() if k not in {'session_state', 'status'}}
-    status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(SESSION_STATE.keys()),
-            'VS_KEYS': list(SESSION_STATE['vs'].keys()),
+    status = _beautify_status({**session_state, 'SESSION_STATE_KEYS': list(GLOBAL_CACHE.keys()),
+            'VS_KEYS': list(GLOBAL_CACHE['vs'].keys()),
             **_parameters})
 
     """ END: Update only this part if necessary """
@@ -409,7 +387,7 @@ min-height: 600px;
             with gr.Column(scale=1):
                 with gr.Accordion("Info", open=False) as info_accordin:
                     attachments = _create_from_dict(ATTACHMENTS)
-                with gr.Accordion("Settings", open=True) as settings_accordin:
+                with gr.Accordion("Settings", open=False) as settings_accordin:
                     settings = _create_from_dict(SETTINGS)
                 with gr.Accordion("Parameters", open=True) as parameters_accordin:
                     parameters = _create_from_dict(PARAMETERS)
@@ -485,6 +463,8 @@ if __name__ == '__main__':
 
     import langchain
     langchain.debug = DEBUG
+
+    prebuild_vs()
 
     demo = get_demo()
     from utils import reload_javascript

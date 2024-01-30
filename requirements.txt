@@ -2,6 +2,7 @@ gradio<4.0
 python-dotenv
 bs4
 opencv-python
+jinja2
 
 # for Azure
 azure-cognitiveservices-speech
