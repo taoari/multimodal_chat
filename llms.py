@@ -82,6 +82,19 @@ def _format_messages(history, message=None, system=None, format='plain',
             _history.append(f"{message} [/INST] ")
         return ''.join(_history)
     
+    elif format == 'llama3':
+        _history.append('<|begin_of_text|>')
+        if system:
+            _history.append(f'<|start_header_id|>system<|end_header_id|>\n\n{system}<|eot_id|>')
+        for human, ai in history:
+            if human:
+                _history.append(f'<|start_header_id|>{user_name}<|end_header_id|>\n\n{human}<|eot_id|>')
+            if ai:
+                _history.append(f'<|start_header_id|>{bot_name}<|end_header_id|>\n\n{ai}<|eot_id|>')
+        if message:
+            _history.append(f'<|start_header_id|>{user_name}<|end_header_id|>\n\n{message}<|eot_id|>')
+            _history.append(f'<|start_header_id|>{bot_name}<|end_header_id|>\n\n')
+        return ''.join(_history)
     elif format == 'plain':
         if system:
             _history.append(system)
@@ -224,6 +237,8 @@ def __hf_helper_fn(chat_engine):
         system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_FALCON, 'User', 'Falcon', 'plain'
     elif chat_engine.startswith('mpt'):
         system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_MPT, 'user', 'assistant', 'chatml'
+    elif chat_engine.lower().startswith('meta-llama'):
+        system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama3'
     elif chat_engine.lower().startswith('llama'):
         system, user_name, bot_name, _format = DEFAULT_INSTRUCTIONS_LLAMA, 'user', 'assistant', 'llama'
     else:

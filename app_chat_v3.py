@@ -47,7 +47,7 @@ ATTACHMENTS = {
 }
 
 SETTINGS = {
-    'chat_engine': dict(cls='Dropdown', choices=['auto', 'gpt-3.5-turbo-16k', 'gpt-4'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
+    'chat_engine': dict(cls='Dropdown', choices=['auto', 'gpt-3.5-turbo', 'gpt-4o'] + list(HF_ENDPOINTS.keys()), #, 'falcon-7b-instruct']
             value='auto', 
             interactive=True, label="Chat engine"),
     '_format': dict(cls='Radio', choices=['auto', 'html', 'plain', 'json'], value='auto', 
@@ -91,7 +91,7 @@ def bot_fn(message, history, *args):
     kwargs = {name: value for name, value in zip(KWARGS.keys(), args)}
     kwargs['verbose'] = True # auto print llm calls
 
-    AUTOS = {'chat_engine': 'gpt-3.5-turbo-16k'}
+    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
     # set param to default value if param is "auto"
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]

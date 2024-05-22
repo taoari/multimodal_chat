@@ -84,6 +84,29 @@ def bendmark_tgi_llama2(queries):
         res.append(_res)
     return pd.DataFrame(res)
 
+def bendmark_tgi_phi(queries):
+    kwargs = {'max_new_tokens': 1024} # , 'return_full_text': True}
+    from text_generation import Client
+    client = Client(args.url, timeout=60)
+    res = []
+    for query in tqdm.tqdm(queries):
+        __TIC = time.time()
+        prompt = f"{query}\n"
+        resp = client.generate(prompt, **kwargs)
+        __TOC = time.time()
+        # import pdb; pdb.set_trace()
+        if args.verbose:
+            print(f'User: {query}')
+            print(f'Assistant: {resp.generated_text.lstrip()}')
+        _res = dict(prompt_tokens=num_tokens_from_string(prompt),
+                   completion_tokens=num_tokens_from_string(resp.generated_text))
+        _res['completion_tokens.ori'] =  resp.details.generated_tokens
+        _res['total_tokens'] =  _res['prompt_tokens'] + _res['completion_tokens']
+        _res['model'] = args.model
+        _res['time'] = __TOC - __TIC
+        res.append(_res)
+    return pd.DataFrame(res)
+
 def benchmark_vllm(queries):
     """Same as OpenAI, but use Completion instead of ChatCompletion. Also count w.r.t tiktoken"""
     import openai
@@ -144,7 +167,7 @@ python llm_benchmark.py tgi llama-2-70b-chat --url http://172.31.91.91:8093
         epilog=usage,
         formatter_class=UltimateHelpFormatter, # argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument('engine', choices=['openai', 'tgi', 'vllm'],
+    parser.add_argument('engine', choices=['openai', 'tgi', 'tgi_phi', 'vllm'],
             help='LLM engine: e.g. openai, tgi, etc.')
     parser.add_argument('model',
             help='LLM model: e.g. gpt-3.5-turbo, etc.')
@@ -166,6 +189,9 @@ if __name__ == '__main__':
 
     elif args.engine == 'tgi':
         res  = bendmark_tgi_llama2(queries)
+
+    elif args.engine == 'tgi_phi':
+        res = bendmark_tgi_phi(queries)
 
     elif args.engine == 'vllm':
         res = benchmark_vllm(queries)
