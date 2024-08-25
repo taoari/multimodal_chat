@@ -1,6 +1,7 @@
 import os
 from bs4 import BeautifulSoup
 import gradio as gr
+from jinja2 import Template
 
 
 """User message should be in the following format for multimodal input:
@@ -81,28 +82,39 @@ COLLAPSE_TEMPLATE = """
 {text}
 </details>"""
 
-def format_to_message(res, _format='html'):
+REFERENCE_TEMPLATE = """
+<div class="reference">
+<h2><b>{{ title }}</b></h2>
+<ol>
+{% for ref in sources -%}
+<li><a href="{{ ref.link }}">{{ ref.text }} <span class="badge badge-light text-info">score:  {{ ref.score }}</span></a></li>
+{% endfor -%}
+</ol>
+</div>
+"""
+
+def format_to_message(msg_dict, _format='html'):
     if _format == 'html':
-        msg = res["text"] if "text" in res else ""
-        if "images" in res and len(res["images"]) > 0:
-            for filepath in res["images"]:
+        msg = msg_dict["text"] if "text" in msg_dict else ""
+        if "images" in msg_dict and len(msg_dict["images"]) > 0:
+            for filepath in msg_dict["images"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<img src="{filepath}" alt="{os.path.basename(filepath)}"/>'
-        if "audios" in res and len(res["audios"]) > 0:
-            for filepath in res["audios"]:
+        if "audios" in msg_dict and len(msg_dict["audios"]) > 0:
+            for filepath in msg_dict["audios"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<audio controls><source src="{filepath}">{os.path.basename(filepath)}</audio>'
-        if "videos" in res and len(res["videos"]) > 0:
-            for filepath in res["videos"]:
+        if "videos" in msg_dict and len(msg_dict["videos"]) > 0:
+            for filepath in msg_dict["videos"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<video controls><source src="{filepath}">{os.path.basename(filepath)}</video>'
-        if "files" in res and len(res["files"]) > 0:
-            for filepath in res["files"]:
+        if "files" in msg_dict and len(msg_dict["files"]) > 0:
+            for filepath in msg_dict["files"]:
                 filepath = _prefix_local_file(filepath)
                 msg += f'<a href="{filepath}">📁 {os.path.basename(filepath)}</a>'
-        if "buttons" in res and len(res["buttons"]) > 0:
+        if "buttons" in msg_dict and len(msg_dict["buttons"]) > 0:
             msg += '<br />'
-            for btn in res["buttons"]:
+            for btn in msg_dict["buttons"]:
                 # btn btn-primary for bootstrap formatting, btn-chatbot to indicate it is a chatbot button
                 btn = dict(text=btn, value=btn) if isinstance(btn, str) else btn
                 if "value" in btn:
@@ -110,9 +122,9 @@ def format_to_message(res, _format='html'):
                 else:
                     msg += f""" <a class="btn btn-primary btn-chatbot-href text-white" href="{btn['href']}">{btn['text']}</a>"""
 
-        if "cards" in res and len(res["cards"]) > 0:
+        if "cards" in msg_dict and len(msg_dict["cards"]) > 0:
             cards_msg = ""
-            for card in res["cards"]:
+            for card in msg_dict["cards"]:
                 _card = {}
                 for key in ['image', 'title', 'text', 'extra']:
                     _card[key] = card[key] if key in card else ""
@@ -120,10 +132,10 @@ def format_to_message(res, _format='html'):
                     _card["extra"] += format_to_message(dict(buttons=card["buttons"]))
                 cards_msg += CARD_TEMPLATE.format(alt=os.path.basename(card["image"]), **_card)
             msg += f"""\n<div class="card-group">{cards_msg}</div>""".replace('\n', '')
-        if "collapses" in res and len(res["collapses"]) > 0:
+        if "collapses" in msg_dict and len(msg_dict["collapses"]) > 0:
             import uuid
             collapses_msg_pre = ""
-            for collapse in res["collapses"]:
+            for collapse in msg_dict["collapses"]:
                 before = 'before' in collapse and collapse['before']
                 _collapse = COLLAPSE_TEMPLATE.format(id=str(uuid.uuid4()) + ("-before" if before else ""), 
                         title=collapse['title'], text=collapse['text'])
@@ -132,36 +144,48 @@ def format_to_message(res, _format='html'):
                 else:
                     msg += _collapse
             msg = collapses_msg_pre + msg # collapses are usually are the front
+        if "references" in msg_dict:
+            for ref in msg_dict['references']:
+                msg += Template(REFERENCE_TEMPLATE).render(**ref)
 
     elif _format == 'plain':
-        msg = res["text"] if "text" in res else ""
+        msg = msg_dict["text"] if "text" in msg_dict else ""
 
         files = []
         for key in ['images', 'audios', 'videos', 'files']:
-            if key in res:
-                files.extend(res[key])
+            if key in msg_dict:
+                files.extend(msg_dict[key])
         cards = []
-        if 'cards' in res:
-            for card in res['cards']:
+        if 'cards' in msg_dict:
+            for card in msg_dict['cards']:
                 cards.append(f"**{card['title']}**:\n\t{card['text']}")
 
         msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)]).strip()
         # ignore buttons and collapses
 
     elif _format == 'speech':
-        msg = res["text"] if "text" in res else ""
+        msg = msg_dict["text"] if "text" in msg_dict else ""
         # only text, ignore files, cards, buttons and collapses
         
     elif _format == 'json':
         import json
-        msg = json.dumps(res, indent=2)
+        msg = json.dumps(msg_dict, indent=2)
     else:
         raise ValueError(f"Invalid format: {_format}")
 
     return msg
 
 def _parse_and_delete(soup):
-    res = dict(buttons=[], cards=[], collapses=[])
+    res = dict(buttons=[], cards=[], collapses=[], references=[])
+    # reference
+    for elem in soup.find_all('div', class_='reference'):
+        title = elem.h2.text
+        sources = []
+        for li in elem.find_all('a'):
+            src = dict(link=li.get('href'), score=float(li.span.text.split(': ')[-1]), text=li.contents[0].strip())
+            sources.append(src)
+        res['references'].append(dict(title=title, sources=sources))
+        elem.extract()
     # collapses
     for elem in soup.find_all("details"):
         collapse = dict(title=elem.summary.text.strip(),
@@ -255,6 +279,13 @@ def test_parse_message_collapse():
     assert target == parse_message(format_to_message(target), cleanup=True)
     target = dict(text="Final results goes here", collapses=[dict(
             title="Show progress", text="Scratch pad goes here", before=False)])
+    assert target == parse_message(format_to_message(target), cleanup=True)
+
+def test_parse_message_reference():
+    target = dict(text="This is a reference", references=[dict(title="Sources", sources=[
+        dict(text="Hello", link="https://hello.com", score=0.5),
+        dict(text="World", link="https://world.com", score=0.3),
+    ])])
     assert target == parse_message(format_to_message(target), cleanup=True)
 
 def _reformat_message(message, _format='plain'):

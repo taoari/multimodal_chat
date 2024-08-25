@@ -170,6 +170,11 @@ def _random_bot_fn(message, history, **kwargs):
     target = dict(text="Final results goes here", collapses=[dict(
             title="Show progress", text="Scratch pad goes here", before=False)])
     samples['collapse'] = format_to_message(target)
+    target = dict(text="This is a reference", references=[dict(title="Sources", sources=[
+        dict(text="📁 hello.pdf", link="https://hello.com", score=0.5),
+        dict(text="📁 World.pdf", link="https://world.com", score=0.3),
+    ])])
+    samples['reference'] = format_to_message(target)
 
     if message in samples:
         bot_message = samples[message]
