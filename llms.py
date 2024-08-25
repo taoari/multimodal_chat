@@ -176,14 +176,15 @@ def _random_bot_fn(message, history, **kwargs):
     ])])
     samples['reference'] = format_to_message(target)
     samples['markdown'] = """
-# Title
-## Subtitle
-
 Hello **World**
 
 ![This is a cat](https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg)
+    """
+    samples['markdown_slack'] = """
+Hello *World*
 
-https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4
+*Resources*
+<https://hello.com|📁 hello.pdf> `score: 0.5`
     """
 
     if message in samples:
