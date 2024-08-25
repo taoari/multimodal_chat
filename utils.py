@@ -84,7 +84,7 @@ COLLAPSE_TEMPLATE = """
 
 REFERENCE_TEMPLATE = """
 <div class="reference">
-<h2><b>{{ title }}</b></h2>
+<h6><b>{{ title }}</b></h6>
 <ol>
 {% for ref in sources -%}
 <li><a href="{{ ref.link }}">{{ ref.text }} <span class="badge badge-light text-info">score:  {{ ref.score }}</span></a></li>
@@ -183,7 +183,7 @@ def _parse_and_delete(soup):
     res = dict(buttons=[], cards=[], collapses=[], references=[])
     # reference
     for elem in soup.find_all('div', class_='reference'):
-        title = elem.h2.text
+        title = elem.h6.text
         sources = []
         for li in elem.find_all('a'):
             src = dict(link=li.get('href'), score=float(li.span.text.split(': ')[-1]), text=li.contents[0].strip())

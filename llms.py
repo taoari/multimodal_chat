@@ -175,6 +175,16 @@ def _random_bot_fn(message, history, **kwargs):
         dict(text="📁 World.pdf", link="https://world.com", score=0.3),
     ])])
     samples['reference'] = format_to_message(target)
+    samples['markdown'] = """
+# Title
+## Subtitle
+
+Hello **World**
+
+![This is a cat](https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg)
+
+https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4
+    """
 
     if message in samples:
         bot_message = samples[message]
