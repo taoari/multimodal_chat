@@ -159,8 +159,12 @@ def format_to_message(msg_dict, _format='html'):
         if 'cards' in msg_dict:
             for card in msg_dict['cards']:
                 cards.append(f"**{card['title']}**:\n\t{card['text']}")
+        buttons = []
+        if 'buttons' in msg_dict:
+            for btn in msg_dict['buttons']:
+                buttons.append(btn if isinstance(btn, str) else btn['text'])
 
-        msg = '\n\n'.join([msg, '\n\n'.join(files), '\n\n'.join(cards)]).strip()
+        msg = '\n\n'.join([msg] + files + cards + buttons).strip()
         # ignore buttons and collapses
 
     elif _format == 'speech':
