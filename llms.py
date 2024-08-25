@@ -178,7 +178,7 @@ def _random_bot_fn(message, history, **kwargs):
     else:
         bot_message = random.choice(list(samples.values()))
     if 'verbose' in kwargs and kwargs['verbose']:
-        _print_messages([], message, bot_message)
+        _print_messages(history, message, bot_message)
     return bot_message
 
 def _openai_bot_fn(message, history, **kwargs):
