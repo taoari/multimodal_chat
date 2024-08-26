@@ -12,6 +12,8 @@ from utils import parse_message, format_to_message
 
 HF_ENDPOINTS = {}
 
+client = None
+
 def parse_endpoints_from_environ():
     global HF_ENDPOINTS
     for name, value in os.environ.items():
@@ -201,14 +203,23 @@ def _openai_bot_fn(message, history, **kwargs):
     _kwargs = dict(temperature=kwargs.get('temperature', 0))
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+    global client
     import openai
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-
-    resp = openai.ChatCompletion.create(
-        model=chat_engine,
-        messages=_format_messages(history, message, system=system, format='openai_chat'),
-        **_kwargs,
-    )
+    if openai.__version__ < '1.0':
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+        resp = openai.ChatCompletion.create(
+            model=chat_engine,
+            messages=_format_messages(history, message, system=system, format='openai_chat'),
+            **_kwargs,
+        )
+    else:
+        if client is None:
+            client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        resp = client.chat.completions.create(
+            model=chat_engine,
+            messages=_format_messages(history, message, system=system, format='openai_chat'),
+            **_kwargs,
+        )
     bot_message = resp.choices[0].message.content
     if 'verbose' in kwargs and kwargs['verbose']:
         _print_messages(history, message, bot_message, system=system, tag=f'openai ({chat_engine})')
@@ -230,18 +241,26 @@ def _openai_stream_bot_fn(message, history, **kwargs):
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
     import openai
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-
-    resp = openai.ChatCompletion.create(
-        model=chat_engine,
-        messages=_format_messages(history, message, system=system, format='openai_chat'),
-        stream=True,
-        **_kwargs,
-    )
-
+    if openai.__version__ < '1.0':
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+        resp = openai.ChatCompletion.create(
+            model=chat_engine,
+            messages=_format_messages(history, message, system=system, format='openai_chat'),
+            stream=True,
+            **_kwargs,
+        )
+    else:
+        if client is None:
+            client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        resp = client.chat.completions.create(
+            model=chat_engine,
+            messages=_format_messages(history, message, system=system, format='openai_chat'),
+            stream=True,
+            **_kwargs,
+        )
     bot_message = ""
     for _resp in resp:
-        if 'content' in _resp.choices[0].delta: # last resp delta is empty
+        if hasattr(_resp.choices[0].delta, 'content') and _resp.choices[0].delta.content is not None: # last resp delta is empty
             bot_message += _resp.choices[0].delta.content # need to accumulate previous message
         yield bot_message.strip() # accumulated message can easily be postprocessed
     if 'verbose' in kwargs and kwargs['verbose']:
