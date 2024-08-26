@@ -203,7 +203,6 @@ def _openai_bot_fn(message, history, **kwargs):
     _kwargs = dict(temperature=kwargs.get('temperature', 0))
     system = kwargs['system_prompt'] if 'system_prompt' in kwargs and kwargs['system_prompt'] else None
     chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
-    global client
     import openai
     if openai.__version__ < '1.0':
         openai.api_key = os.environ["OPENAI_API_KEY"]
@@ -213,6 +212,7 @@ def _openai_bot_fn(message, history, **kwargs):
             **_kwargs,
         )
     else:
+        global client
         if client is None:
             client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         resp = client.chat.completions.create(
@@ -250,6 +250,7 @@ def _openai_stream_bot_fn(message, history, **kwargs):
             **_kwargs,
         )
     else:
+        global client
         if client is None:
             client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         resp = client.chat.completions.create(
