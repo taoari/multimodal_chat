@@ -355,7 +355,13 @@ def change_signature(arg_list, kwarg_dict={}):
         def wrapper(*args, **kwargs):
             bound_args = new_signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
-            return fn(*bound_args.args, **bound_args.kwargs)
+            result = fn(*bound_args.args, **bound_args.kwargs)
+            
+            # Handle generator functions
+            if inspect.isgeneratorfunction(fn):
+                yield from result
+            else:
+                return result
 
         wrapper.__signature__ = new_signature
         return wrapper
