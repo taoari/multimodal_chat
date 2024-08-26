@@ -336,6 +336,31 @@ def fix_exif_orientation(filepath, outpath=None):
         # cases: image don't have getexif
         pass
     
+from functools import wraps
+import inspect
+
+def change_signature(arg_list, kwarg_dict={}):
+    def decorator(fn):
+        # Create a signature from arg_list and kwarg_dict
+        parameters = []
+        for arg in arg_list:
+            parameters.append(inspect.Parameter(arg, inspect.Parameter.POSITIONAL_OR_KEYWORD))
+
+        for kwarg, default in kwarg_dict.items():
+            parameters.append(inspect.Parameter(kwarg, inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default))
+
+        new_signature = inspect.Signature(parameters)
+
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            bound_args = new_signature.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+            return fn(*bound_args.args, **bound_args.kwargs)
+
+        wrapper.__signature__ = new_signature
+        return wrapper
+    return decorator
+
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
     """
