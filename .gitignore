@@ -5,3 +5,5 @@ __MACOSX
 
 temp
 test_*
+
+mmchat/.env

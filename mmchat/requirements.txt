@@ -1,0 +1,8 @@
+gradio
+python-dotenv
+bs4
+jinja2
+
+# for Azure
+azure-cognitiveservices-speech
+
