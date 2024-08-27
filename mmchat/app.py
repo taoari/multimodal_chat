@@ -13,7 +13,7 @@ import gradio as gr
 load_dotenv()  # take environment variables from .env.
 
 logger = logging.getLogger(__name__)
-logger.basicConfig(level=logging.WARN, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+logging.basicConfig(level=logging.WARN, format='%(asctime)-15s] %(message)s', datefmt="%m/%d/%Y %I:%M:%S %p %Z")
 
 def print(*args, **kwargs):
     sep = kwargs['sep'] if 'sep' in kwargs else ' '
@@ -60,7 +60,9 @@ def get_demo():
     }"""
     with gr.Blocks(css=css) as demo:
         from utils.chatbot import ChatInterface
-        chatbot = ChatInterface(bot_fn, type='messages', multimodal=False)
+        chatbot = ChatInterface(bot_fn, type='messages', 
+                multimodal=False,
+                avatar_images=('assets/user.png', 'assets/bot.png'))
     return demo
 
 def parse_args():

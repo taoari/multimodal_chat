@@ -31,6 +31,7 @@ class ChatInterface(gr.Blocks):
                 additional_outputs=[],
                 type='tuples',
                 multimodal=False,
+                avatar_images=(None, None),
                 analytics_enabled=None,
                 css=None,
                 title=None,
@@ -42,7 +43,7 @@ class ChatInterface(gr.Blocks):
             title=title or "Gradio",
             theme=theme,
         )
-        chatbot = gr.Chatbot(type=type)
+        chatbot = gr.Chatbot(type=type, avatar_images=avatar_images)
         chatbot_state = gr.State([])
 
         with gr.Group():
