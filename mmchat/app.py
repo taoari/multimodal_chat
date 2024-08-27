@@ -3,12 +3,13 @@ import os
 import time
 import logging
 import jinja2
-from dotenv import load_dotenv
 import gradio as gr
 
 ################################################################
 # Load .env and logging
 ################################################################
+
+from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
 
@@ -19,6 +20,10 @@ def print(*args, **kwargs):
     sep = kwargs['sep'] if 'sep' in kwargs else ' '
     logger.warning(sep.join([str(val) for val in args])) # use level WARN for print, as gradio level INFO print unwanted messages
 
+################################################################
+# Utils
+################################################################
+    
 def _print_messages(messages, title='Chat history:'):
     icons = {'system': '🖥️', 'user': '👤', 'assistant': '🤖'}
     res = [] if title is None else [title]
@@ -26,6 +31,10 @@ def _print_messages(messages, title='Chat history:'):
         res.append(f'{icons[message["role"]]}: {message["content"]}')
     print('\n'.join(res))
 
+################################################################
+# Bot fn
+################################################################
+    
 def _bot_fn(message, history, **kwargs):
     messages = history + [{'role': 'user', 'content': message}]
     import openai
@@ -55,6 +64,10 @@ def _bot_stream_fn(message, history, **kwargs):
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }])
 
 bot_fn = _bot_stream_fn
+
+################################################################
+# Demo
+################################################################
 
 def get_demo():
     css="""#chatbot {

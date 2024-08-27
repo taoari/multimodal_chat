@@ -75,8 +75,16 @@ class ChatInterface(gr.Blocks):
         # NOTE: gr.State will not show in API
         fake_api_btn.click(self._api_fn, [textbox, chatbot_state], [fake_response, chatbot_state], api_name='chat')
 
+        self._setup_submit(textbox.submit, textbox, chatbot)
+        self._setup_submit(submit_btn.click, textbox, chatbot)
+
+        retry_btn.click(self._retry, [chatbot], [chatbot])
+        undo_btn.click(self._undo, [textbox, chatbot], [textbox, chatbot]) # NOTE: state can not undo or retry
+        clear_btn.click(self._clear, None, [chatbot, chatbot_state])
+
+    def _setup_submit(self, event_trigger, textbox, chatbot):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
-        chat_msg = textbox.submit(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False)
+        chat_msg = event_trigger(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False)
         if self.is_generator:
             bot_msg = chat_msg.then(self._bot_stream_fn, chatbot, chatbot, api_name='chat_with_history')
         else:
@@ -113,3 +121,30 @@ class ChatInterface(gr.Blocks):
         else:
             response = self.fn(message, chat_state, *args)
         return response, chat_state + [{'role': 'user', 'content': message}, {'role': 'assistant', 'content': response}]
+    
+    def _retry(self, history):
+        if len(history) >= 2:
+            message = history[-2]['content']
+            _history = history[:-2]
+            if self.is_generator:
+                # clear history first
+                yield history[:-1]
+
+                response = self.fn(message, _history)
+                for _response in response:
+                    history[-1]['content'] = _response
+                    yield history
+            else:
+                history[-1]['content'] = self.fn(message, _history)
+                yield history
+        else:
+            yield history
+                
+    def _undo(self, textbox, history):
+        if len(history) >= 2:
+            message = history[-2]['content']
+            return message, history[:-2]
+        return textbox, history
+
+    def _clear(self):
+        return gr.update(value=[]), gr.update(value=[])
