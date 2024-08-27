@@ -63,7 +63,8 @@ def _bot_stream_fn(message, history, **kwargs):
         yield bot_message.strip()
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }])
 
-bot_fn = _bot_stream_fn
+# bot_fn = _bot_stream_fn
+from utils.llms import _random_bot_fn as bot_fn
 
 ################################################################
 # Demo
