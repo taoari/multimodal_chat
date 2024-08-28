@@ -135,8 +135,10 @@ def get_demo():
                 KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
             with gr.Column(scale=9):
                 # chatbot
+                from utils.utils import change_signature
+                _sig_bot_fn = change_signature(['message', 'history'] + list(KWARGS.keys()))(bot_fn) # better API
                 from utils.gradio import ChatInterface
-                chatbot = ChatInterface(bot_fn, type='messages', 
+                chatbot = ChatInterface(_sig_bot_fn, type='messages', 
                         additional_inputs=list(KWARGS.values()),
                         additional_outputs=[KWARGS['session_state'], status],
                         multimodal=False,

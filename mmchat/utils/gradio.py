@@ -1,4 +1,5 @@
 import inspect
+from functools import wraps
 import re
 import gradio as gr
 
@@ -44,7 +45,7 @@ class ChatInterface(gr.Blocks):
             title=title or "Gradio",
             theme=theme,
         )
-        chatbot = gr.Chatbot(type=type, avatar_images=avatar_images)
+        chatbot = gr.Chatbot(type=type, avatar_images=avatar_images, label='Chatbot')
         chatbot_state = gr.State([])
 
         with gr.Group():
@@ -52,14 +53,14 @@ class ChatInterface(gr.Blocks):
                 if not multimodal:
                     upload_btn = gr.UploadButton("📁", scale=0.1, min_width=0, interactive=True)
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
-                    textbox = gr.Textbox(placeholder="Type a message...", scale=7, show_label=False, container=False, interactive=True)
+                    textbox = gr.Textbox(placeholder="Type a message...", scale=7, show_label=False, container=False, interactive=True, label="Message")
                     submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True)
-                    fake_response = gr.Textbox(visible=False)
+                    fake_response = gr.Textbox(visible=False, label="Response")
                 else:
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
                     textbox = gr.MultimodalTextbox(placeholder="Type a message...", file_count="multiple",
-                            scale=10, show_label=False, container=False, interactive=True)
-                    fake_response = gr.MultimodalTextbox(visible=False)
+                            scale=10, show_label=False, container=False, interactive=True, label="Message")
+                    fake_response = gr.MultimodalTextbox(visible=False, label="Response")
 
         with gr.Row():
             retry_btn = gr.Button("Retry", scale=1, min_width=0)
@@ -85,10 +86,7 @@ class ChatInterface(gr.Blocks):
         self.undo_btn = undo_btn
         self.clear_btn = clear_btn
 
-        # NOTE: gr.State will not show in API
-        fake_api_btn.click(self._api_fn, [textbox, chatbot_state] + additional_inputs, 
-                [fake_response, chatbot_state], api_name='chat')
-
+        self._setup_api_fn(fake_api_btn.click, textbox, chatbot_state, fake_response, additional_inputs)
         self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
         self._setup_submit(submit_btn.click, textbox, chatbot, additional_inputs, api_name=False)
 
@@ -101,7 +99,6 @@ class ChatInterface(gr.Blocks):
             [textbox, upload_btn], 
             [textbox], queue=False, api_name='upload')
 
-
     def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
         chat_msg = event_trigger(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False)
@@ -111,6 +108,19 @@ class ChatInterface(gr.Blocks):
             bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False)
 
+    def _setup_api_fn(self, event_trigger, textbox, chatbot_state, fake_response, additional_inputs):
+        @wraps(self.fn)
+        def _api_fn(self, message, chat_state, *args):
+            if self.is_generator:
+                *_, response = self.fn(message, chat_state, *args)
+            else:
+                response = self.fn(message, chat_state, *args)
+            return response, chat_state + [{'role': 'user', 'content': message}, {'role': 'assistant', 'content': response}]
+        
+        # NOTE: gr.State will not show in API
+        event_trigger(_api_fn, [textbox, chatbot_state] + additional_inputs, 
+                [fake_response, chatbot_state], api_name='chat')
+        
     def _add_message(self, message, history):
         # message: str (Textbox) or dict (gr.MultimodalTextbox)
         # history: tuples or messages
@@ -134,13 +144,6 @@ class ChatInterface(gr.Blocks):
         for _response in response:
             history[-1]['content'] = _response
             yield history
-
-    def _api_fn(self, message, chat_state, *args):
-        if self.is_generator:
-            *_, response = self.fn(message, chat_state, *args)
-        else:
-            response = self.fn(message, chat_state, *args)
-        return response, chat_state + [{'role': 'user', 'content': message}, {'role': 'assistant', 'content': response}]
     
     def _retry(self, history, *args):
         if len(history) >= 2:
@@ -169,10 +172,10 @@ class ChatInterface(gr.Blocks):
     def _clear(self):
         return gr.update(value=[]), gr.update(value=[])
     
-    def _upload_fn(self, msg, filepath_or_filename):
-        if filepath_or_filename is None:
-            return msg
-        filename = filepath_or_filename.name if hasattr(filepath_or_filename, 'name') else filepath_or_filename
+    def _upload_fn(self, message, filepath):
+        if filepath is None:
+            return message
+        filename = filepath.name if hasattr(filepath, 'name') else filepath
         import os, mimetypes
         from utils.message import render_message
         mtype = mimetypes.guess_type(filename)[0]
@@ -184,8 +187,8 @@ class ChatInterface(gr.Blocks):
             msg_dict = {'videos': [filename]}
         else:
             msg_dict = {'files': [filename]}
-        msg_dict['text'] = msg
-        return msg + '\n' + re.sub(r'^\s+', '', render_message(msg_dict)).replace('\n', '')
+        msg_dict['text'] = message
+        return message + '\n' + re.sub(r'^\s+', '', render_message(msg_dict)).replace('\n', '')
 
 
 def reload_javascript():
