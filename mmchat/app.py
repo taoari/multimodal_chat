@@ -80,7 +80,7 @@ def get_demo():
     padding-right: 8px;
     }"""
     with gr.Blocks(css=css) as demo:
-        from utils.chatbot import ChatInterface
+        from utils.gradio import ChatInterface
         chatbot = ChatInterface(bot_fn, type='messages', 
                 multimodal=False,
                 avatar_images=('assets/user.png', 'assets/bot.png'))

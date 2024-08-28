@@ -1,6 +1,7 @@
 from jinja2 import Template
 from bs4 import BeautifulSoup
 import os
+import re
 
 def _trim_local_file(url):
     return url.removeprefix('\\file=')
@@ -14,103 +15,105 @@ def _prefix_local_file(url):
 def get_spinner(variant='primary'):
     return f"""<div class="spinner-border spinner-border-sm text-{variant}" role="status"></div>"""
 
-MESSAGE_TEMPLATE = """{{ msg.text }}
-{% if msg.images -%}
+MESSAGE_TEMPLATE = """
+{% if msg.images %}
     <div class="images">
-    {%- for image in msg.images -%}
+    {% for image in msg.images %}
         <img src="{{ _prefix_local_file(image) }}" alt="{{ _basename(image) }}">
-    {%- endfor -%}
+    {% endfor %}
     </div>
-{%- endif -%}
-{%- if msg.audios -%}
+{% endif %}
+{% if msg.audios %}
     <div class="audios">
-    {%- for audio in msg.audios -%}
+    {% for audio in msg.audios %}
         <audio controls>
             <source src="{{ _prefix_local_file(audio) }}">
             {{ _basename(audio) }}
         </audio>
-    {%- endfor -%}
+    {% endfor %}
     </div>
-{%- endif -%}
-{%- if msg.videos -%}
+{% endif %}
+{% if msg.videos %}
     <div class="videos">
-    {%- for video in msg.videos -%}
-        <video controls width="320">
+    {% for video in msg.videos %}
+        <video controls>
             <source src="{{ _prefix_local_file(video) }}">
             {{ _basename(video) }}
         </video>
-    {%- endfor -%}
+    {% endfor %}
     </div>
-{%- endif -%}
-{%- if msg.files -%}
+{% endif %}
+{% if msg.files %}
     <div class="files">
-    {%- for file in msg.files -%}
-        <a href="{{ _prefix_local_file(file) }}" class="btn btn-primary" download>📁 {{ _basename(file) }}</a>
-    {%- endfor -%}
+    {% for file in msg.files %}
+        <a href="{{ _prefix_local_file(file) }}">📁 {{ _basename(file) }}</a>
+    {% endfor %}
     </div>
-{%- endif -%}
-{%- if msg.buttons -%}
+{% endif %}
+{% if msg.buttons %}
     <div class="buttons">
-    {%- for button in msg.buttons -%}
-        {%- if button is string -%}
+    {% for button in msg.buttons %}
+        {% if button is string %}
             <a class="btn btn-primary btn-chatbot text-white" value="{{ button }}">{{ button }}</a>
-        {%- else -%}
-            {%- if button.value -%}
+        {% else %}
+            {% if button.value %}
                 <a class="btn btn-primary btn-chatbot text-white" value="{{ button.value }}">{{ button.text }}</a>
-            {%- elif button.href -%}
+            {% elif button.href %}
                 <a class="btn btn-primary btn-chatbot-href text-white" href="{{ button.href }}">{{ button.text }}</a>
-            {%- endif -%}
-        {%- endif -%}
-    {%- endfor -%}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
     </div>
-{%- endif -%}
-{%- if msg.cards -%}
-    <div class="cards">
-    {%- for card in msg.cards -%}
+{% endif %}
+{% if msg.cards %}
+    <div class="card-group">
+    {% for card in msg.cards %}
         <div class="card" style="width: 18rem;">
             <img src="{{ _prefix_local_file(card.image) }}" class="card-img-top" alt="{{ _basename(card.image) }}">
             <div class="card-body">
-                <h5 class="card-title">{{ card.title }}</h5>
-                <p class="card-text">{{ card.text }}</p>
-                {%- if card.buttons -%}
-                    {%- for button in card.buttons -%}
-                        {%- if button.value -%}
+                <h5 class="card-title"><b class="text-primary">{{ card.title }}</b></h5>
+                <p class="card-text text-primary">{{ card.text }}</p>
+                {% if card.buttons %}
+                    {% for button in card.buttons %}
+                        {% if button.value %}
                             <a class="btn btn-primary btn-chatbot text-white" value="{{ button.value }}">{{ button.text }}</a>
-                        {%- elif button.href -%}
-                            <a class="btn btn-secondary btn-chatbot-href text-white" href="{{ button.href }}">{{ button.text }}</a>
-                        {%- endif -%}
-                    {%- endfor -%}
-                {%- endif -%}
+                        {% elif button.href %}
+                            <a class="btn btn-primary btn-chatbot-href text-white" href="{{ button.href }}">{{ button.text }}</a>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
             </div>
         </div>
-    {%- endfor -%}
+    {% endfor %}
     </div>
-{%- endif -%}
-{%- if msg.references -%}
+{% endif %}
+{% if msg.references %}
     <div class="references">
-        {%- for ref in msg.references -%}
+        {% for ref in msg.references %}
             <div class="reference">
             <b>{{ ref.title }}</b>
-            <ul>
-            {%- for source in ref.sources -%}
+            <ol>
+            {% for source in ref.sources %}
                 <li><a href="{{ source.link }}">{{ source.text }}</a> 
-                {%- if source.score -%}
-                    (Score: {{ source.score }})
-                {%- endif -%}
+                {% if source.score %}
+                    <code>score: {{ source.score }}</code>
+                {% endif %}
                 </li>
-            {%- endfor -%}
-            </ul>
+            {% endfor %}
+            </ol>
             <div>
-        {%- endfor -%}
+        {% endfor %}
     </div>
-{%- endif -%}
+{% endif %}
 """
 
 def _basename(filepath):
     return os.path.basename(filepath)
 
 def render_message(msg_dict, format='html'):
-    return Template(MESSAGE_TEMPLATE).render(msg=msg_dict, _prefix_local_file=_prefix_local_file, _basename=_basename).strip()
+    msg = re.sub(r'\n+', '\n', Template(MESSAGE_TEMPLATE, trim_blocks=True, lstrip_blocks=True).render(msg=msg_dict,
+            _prefix_local_file=_prefix_local_file, _basename=_basename)).strip()
+    return msg if 'text' not in msg_dict or not msg_dict['text'] else msg_dict['text'] + '\n' + msg
 
 def parse_message(msg_html, cleanup=False):
     soup = BeautifulSoup(msg_html, "html.parser")
@@ -142,7 +145,7 @@ def parse_message(msg_html, cleanup=False):
             else:
                 result["buttons"].append({"text": button.text, "href": button.get("href")})
 
-    if elem := soup.find("div", class_="cards"):
+    if elem := soup.find("div", class_="card-group"):
         for card in soup.find_all("div", class_="card"):
             card_dict = {
                 "image": _trim_local_file(card.find("img").get("src")),
@@ -162,8 +165,8 @@ def parse_message(msg_html, cleanup=False):
             sources = []
             for li in ref.find_all("li"):
                 src = {"text": li.a.text.strip(), "link": li.a.get("href")}
-                if "Score: " in li.text:
-                    src['score'] = float(li.text.split("Score: ")[-1].rstrip(')'))
+                if "score: " in li.text:
+                    src['score'] = float(li.text.split("score: ")[-1])
                 sources.append(src)
             result["references"].append({"title": ref_title, "sources": sources})
 

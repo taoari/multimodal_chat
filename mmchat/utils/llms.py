@@ -1,8 +1,7 @@
 import random
-from utils import render_message
+from utils.message import render_message, get_spinner
 
 def _random_bot_fn(message, history, **kwargs):
-    from utils import get_spinner
 
     # Example multimodal messages
     samples = {}
@@ -28,12 +27,6 @@ def _random_bot_fn(message, history, **kwargs):
     samples['card'] = render_message(target)
     _message = get_spinner() + " Please be patient"
     samples['spinner'] = _message
-    target = dict(text="Final results goes here", collapses=[dict(
-            title="Show progress", text="Scratch pad goes here", before=True)])
-    samples['collapse_before'] = render_message(target)
-    target = dict(text="Final results goes here", collapses=[dict(
-            title="Show progress", text="Scratch pad goes here", before=False)])
-    samples['collapse'] = render_message(target)
     target = dict(text="This is a reference", references=[dict(title="Sources", sources=[
         dict(text="📁 hello.pdf", link="https://hello.com", score=0.5),
         dict(text="📁 World.pdf", link="https://world.com", score=0.3),
@@ -54,7 +47,7 @@ Hello *World*
     if message in samples:
         bot_message = samples[message]
     elif message == 'all':
-        bot_message = '\n'.join(samples.values())
+        bot_message = '<br >'.join(samples.values())
     else:
         bot_message = random.choice(list(samples.values()))
     return bot_message
