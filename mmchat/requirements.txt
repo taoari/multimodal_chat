@@ -1,4 +1,4 @@
-gradio
+gradio<=4.40
 python-dotenv
 bs4
 jinja2
