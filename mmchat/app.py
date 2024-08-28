@@ -31,6 +31,13 @@ def _print_messages(messages, title='Chat history:'):
         res.append(f'{icons[message["role"]]}: {message["content"]}')
     print('\n'.join(res))
 
+def transcribe(audio=None):
+    try:
+        from utils.azure_speech import speech_recognition
+        return speech_recognition(audio)
+    except Exception as e:
+        return f"Microphone is not supported: {e}"
+
 ################################################################
 # Bot fn
 ################################################################
@@ -63,8 +70,8 @@ def _bot_stream_fn(message, history, **kwargs):
         yield bot_message.strip()
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }])
 
-# bot_fn = _bot_stream_fn
-from utils.llms import _random_bot_fn as bot_fn
+bot_fn = _bot_stream_fn
+# from utils.llms import _random_bot_fn as bot_fn
 
 ################################################################
 # Demo
@@ -84,6 +91,7 @@ def get_demo():
         chatbot = ChatInterface(bot_fn, type='messages', 
                 multimodal=False,
                 avatar_images=('assets/user.png', 'assets/bot.png'))
+        chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
     return demo
 
 def parse_args():

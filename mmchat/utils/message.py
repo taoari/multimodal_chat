@@ -71,7 +71,7 @@ MESSAGE_TEMPLATE = """
         <div class="card" style="width: 18rem;">
             <img src="{{ _prefix_local_file(card.image) }}" class="card-img-top" alt="{{ _basename(card.image) }}">
             <div class="card-body">
-                <h5 class="card-title"><b class="text-primary">{{ card.title }}</b></h5>
+                <h5 class="card-title"><b>{{ card.title }}</b></h5>
                 <p class="card-text text-primary">{{ card.text }}</p>
                 {% if card.buttons %}
                     {% for button in card.buttons %}

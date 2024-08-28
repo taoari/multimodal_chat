@@ -1,4 +1,5 @@
 import inspect
+import re
 import gradio as gr
 
 def _convert_history(history, type='tuples'):
@@ -49,7 +50,7 @@ class ChatInterface(gr.Blocks):
         with gr.Group():
             with gr.Row():
                 if not multimodal:
-                    upload_btn = gr.Button("📁", scale=0.1, min_width=0, interactive=True)
+                    upload_btn = gr.UploadButton("📁", scale=0.1, min_width=0, interactive=True)
                     audio_btn = gr.Button("🎤", scale=0.1, min_width=0, interactive=True)
                     textbox = gr.Textbox(placeholder="Type a message...", scale=7, show_label=False, container=False, interactive=True)
                     submit_btn = gr.Button("Submit", variant="primary", scale=1, min_width=0, interactive=True)
@@ -71,6 +72,16 @@ class ChatInterface(gr.Blocks):
         self.type = type
         self.fn = fn
         self.is_generator = inspect.isgeneratorfunction(self.fn) 
+        
+        self.chatbot = chatbot
+        self.chatbot_state = chatbot_state
+        self.upload_btn = upload_btn
+        self.audio_btn = audio_btn
+        self.textbox = textbox
+        self.submit_btn = submit_btn
+        self.retry_btn = retry_btn
+        self.undo_btn = undo_btn
+        self.clear_btn = clear_btn
 
         # NOTE: gr.State will not show in API
         fake_api_btn.click(self._api_fn, [textbox, chatbot_state], [fake_response, chatbot_state], api_name='chat')
@@ -81,6 +92,12 @@ class ChatInterface(gr.Blocks):
         retry_btn.click(self._retry, [chatbot], [chatbot])
         undo_btn.click(self._undo, [textbox, chatbot], [textbox, chatbot]) # NOTE: state can not undo or retry
         clear_btn.click(self._clear, None, [chatbot, chatbot_state])
+
+        upload_btn.upload(
+            self._upload_fn, 
+            [textbox, upload_btn], 
+            [textbox], queue=False, api_name='upload')
+
 
     def _setup_submit(self, event_trigger, textbox, chatbot):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
@@ -148,6 +165,25 @@ class ChatInterface(gr.Blocks):
 
     def _clear(self):
         return gr.update(value=[]), gr.update(value=[])
+    
+    def _upload_fn(self, msg, filepath_or_filename):
+        if filepath_or_filename is None:
+            return msg
+        filename = filepath_or_filename.name if hasattr(filepath_or_filename, 'name') else filepath_or_filename
+        import os, mimetypes
+        from utils.message import render_message
+        mtype = mimetypes.guess_type(filename)[0]
+        if mtype.startswith('image'):
+            msg_dict = {'images': [filename]}
+        elif mtype.startswith('audio'):
+            msg_dict = {'audios': [filename]}
+        elif mtype.startswith('video'):
+            msg_dict = {'videos': [filename]}
+        else:
+            msg_dict = {'files': [filename]}
+        msg_dict['text'] = msg
+        return msg + '\n' + re.sub(r'^\s+', '', render_message(msg_dict)).replace('\n', '')
+
 
 def reload_javascript():
     """reload custom javascript. The following code enables bootstrap css and makes chatbot message buttons responsive.
