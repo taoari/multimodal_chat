@@ -131,6 +131,7 @@ def get_demo():
                 # chatbot
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(bot_fn, type='messages', 
+                        additional_inputs=list(KWARGS.values()),
                         multimodal=False,
                         avatar_images=('assets/user.png', 'assets/bot.png'))
                 chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
