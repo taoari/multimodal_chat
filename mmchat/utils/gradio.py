@@ -71,6 +71,8 @@ class ChatInterface(gr.Blocks):
 
         self.type = type
         self.fn = fn
+        self.additional_inputs = additional_inputs
+        self.additional_outputs = additional_outputs
         self.is_generator = inspect.isgeneratorfunction(self.fn) 
         
         self.chatbot = chatbot
@@ -84,12 +86,13 @@ class ChatInterface(gr.Blocks):
         self.clear_btn = clear_btn
 
         # NOTE: gr.State will not show in API
-        fake_api_btn.click(self._api_fn, [textbox, chatbot_state], [fake_response, chatbot_state], api_name='chat')
+        fake_api_btn.click(self._api_fn, [textbox, chatbot_state] + additional_inputs, 
+                [fake_response, chatbot_state], api_name='chat')
 
-        self._setup_submit(textbox.submit, textbox, chatbot, api_name='chat_with_history')
-        self._setup_submit(submit_btn.click, textbox, chatbot, api_name=False)
+        self._setup_submit(textbox.submit, textbox, chatbot, additional_inputs, api_name='chat_with_history')
+        self._setup_submit(submit_btn.click, textbox, chatbot, additional_inputs, api_name=False)
 
-        retry_btn.click(self._retry, [chatbot], [chatbot], api_name=False)
+        retry_btn.click(self._retry, [chatbot] + additional_inputs, [chatbot], api_name=False)
         undo_btn.click(self._undo, [textbox, chatbot], [textbox, chatbot], api_name=False) # NOTE: state can not undo or retry
         clear_btn.click(self._clear, None, [chatbot, chatbot_state], api_name=False)
 
@@ -99,13 +102,13 @@ class ChatInterface(gr.Blocks):
             [textbox], queue=False, api_name='upload')
 
 
-    def _setup_submit(self, event_trigger, textbox, chatbot, api_name='chat_with_history'):
+    def _setup_submit(self, event_trigger, textbox, chatbot, additional_inputs, api_name='chat_with_history'):
         # https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
         chat_msg = event_trigger(self._add_message, [textbox, chatbot], [textbox, chatbot], api_name=False)
         if self.is_generator:
-            bot_msg = chat_msg.then(self._bot_stream_fn, chatbot, chatbot, api_name=api_name)
+            bot_msg = chat_msg.then(self._bot_stream_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         else:
-            bot_msg = chat_msg.then(self._bot_fn, chatbot, chatbot, api_name=api_name)
+            bot_msg = chat_msg.then(self._bot_fn, [chatbot] + additional_inputs, chatbot, api_name=api_name)
         bot_msg.then(lambda: gr.update(interactive=True), None, [textbox], api_name=False)
 
     def _add_message(self, message, history):
@@ -139,7 +142,7 @@ class ChatInterface(gr.Blocks):
             response = self.fn(message, chat_state, *args)
         return response, chat_state + [{'role': 'user', 'content': message}, {'role': 'assistant', 'content': response}]
     
-    def _retry(self, history):
+    def _retry(self, history, *args):
         if len(history) >= 2:
             message = history[-2]['content']
             _history = history[:-2]
@@ -147,12 +150,12 @@ class ChatInterface(gr.Blocks):
                 # clear history first
                 yield history[:-1]
 
-                response = self.fn(message, _history)
+                response = self.fn(message, _history, *args)
                 for _response in response:
                     history[-1]['content'] = _response
                     yield history
             else:
-                history[-1]['content'] = self.fn(message, _history)
+                history[-1]['content'] = self.fn(message, _history, *args)
                 yield history
         else:
             yield history

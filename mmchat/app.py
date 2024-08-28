@@ -98,6 +98,11 @@ def transcribe(audio=None):
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 bot_fn = _llm_call_stream
 
+def bot_fn(message, history, *args):
+    kwargs = {k: v for k, v in zip(KWARGS.keys(), args)}
+    print(kwargs)
+    yield from _llm_call_stream(message, history, **kwargs)
+
 ################################################################
 # Demo
 ################################################################
@@ -126,12 +131,14 @@ def get_demo():
                     with gr.Accordion(section_name, open=metadata.get('open', False)):
                         settings = _create_from_dict(_settings, tabbed=metadata.get('tabbed', False))
                         KWARGS = {**KWARGS, **settings}
+                status = KWARGS['status']
                 KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
             with gr.Column(scale=9):
                 # chatbot
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(bot_fn, type='messages', 
                         additional_inputs=list(KWARGS.values()),
+                        additional_outputs=[KWARGS['session_state'], status],
                         multimodal=False,
                         avatar_images=('assets/user.png', 'assets/bot.png'))
                 chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
