@@ -46,7 +46,7 @@ SETTINGS = {
         'status': dict(cls='JSON', label='Status'),
     },
     'Settings': {
-        '__metadata': {'open': False, 'tabbed': False},
+        '__metadata': {'open': True, 'tabbed': False},
         'session_state': dict(cls='State', value=_default_session_state),
         'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'gpt-3.5-turbo'], value='auto', 
                 interactive=True, label="Chat engine"),
@@ -54,12 +54,12 @@ SETTINGS = {
                 interactive=True, label="Speech Synthesis"),
     },
     'Parameters': {
-        '__metadata': {'open': True, 'tabbed': False},
+        '__metadata': {'open': False, 'tabbed': False},
         'temperature': dict(cls='Slider', minimum=0, maximum=1, value=0.7, step=0.1, interactive=True, label="Temperature")
     }
 }
 
-# SETTINGS = {}
+KWARGS = {}
 
 ################################################################
 # Utils
@@ -103,6 +103,7 @@ bot_fn = _llm_call_stream
 ################################################################
 
 def get_demo():
+    global KWARGS
     css="""#chatbot {
     min-height: 600px;
     }
@@ -124,6 +125,8 @@ def get_demo():
                     metadata = _settings['__metadata']
                     with gr.Accordion(section_name, open=metadata.get('open', False)):
                         settings = _create_from_dict(_settings, tabbed=metadata.get('tabbed', False))
+                        KWARGS = {**KWARGS, **settings}
+                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
             with gr.Column(scale=9):
                 # chatbot
                 from utils.gradio import ChatInterface
