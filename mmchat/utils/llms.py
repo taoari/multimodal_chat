@@ -60,33 +60,52 @@ Hello *World*
         bot_message = random.choice(list(samples.values()))
     messages = history + [{'role': 'user', 'content': message}]
     _print_messages(messages + [{'role': 'user', 'content': bot_message }])
-    return 
+    return bot_message
 
 
 def _llm_call(message, history, **kwargs):
+    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
+                   max_tokens=kwargs.get('max_tokens', 1024))
+    system_prompt = kwargs.get('system_prompt', None)
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+
     messages = history + [{'role': 'user', 'content': message}]
+    if system_prompt:
+        messages = [{'role': 'system', 'content': system_prompt}]
+
     import openai
     client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     resp = client.chat.completions.create(
-        model='gpt-3.5-turbo',
+        model=chat_engine,
         messages=messages,
+        **_kwargs,
     )
     bot_message = resp.choices[0].message.content
     _print_messages(messages + [{'role': 'user', 'content': bot_message }])
     return bot_message
 
 def _llm_call_stream(message, history, **kwargs):
+    _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
+                   max_tokens=kwargs.get('max_tokens', 1024))
+    system_prompt = kwargs.get('system_prompt', None)
+    chat_engine = kwargs.get('chat_engine', 'gpt-3.5-turbo')
+
     messages = history + [{'role': 'user', 'content': message}]
+    if system_prompt:
+        messages = [{'role': 'system', 'content': system_prompt}]
+
     import openai
     client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     resp = client.chat.completions.create(
-        model='gpt-3.5-turbo',
+        model=chat_engine,
         messages=messages,
         stream=True,
+        **_kwargs,
     )
     bot_message = ""
     for _resp in resp:
         if hasattr(_resp.choices[0].delta, 'content') and _resp.choices[0].delta.content:
             bot_message += _resp.choices[0].delta.content
-        yield bot_message.strip()
+        yield bot_message
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }])
+    return bot_message

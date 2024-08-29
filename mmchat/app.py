@@ -96,12 +96,23 @@ def transcribe(audio=None):
 ################################################################
 
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
-bot_fn = _llm_call_stream
 
 def bot_fn(message, history, *args):
     kwargs = {k: v for k, v in zip(KWARGS.keys(), args)}
+    # update "auto"
+    AUTOS = {'chat_engine': 'random'}
+    for param, default_value in AUTOS.items():
+        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
     print(kwargs)
-    yield from _llm_call_stream(message, history, **kwargs)
+
+    bot_message = {'random': _random_bot_fn,
+        'gpt-3.5-turbo': _llm_call_stream,
+        }.get(kwargs['chat_engine'])(message, history, **kwargs)
+    
+    if isinstance(bot_message, str):
+        yield bot_message
+    else:
+        yield from bot_message
 
 ################################################################
 # Demo
