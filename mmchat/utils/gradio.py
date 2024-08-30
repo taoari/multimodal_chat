@@ -110,7 +110,7 @@ class ChatInterface(gr.Blocks):
 
     def _setup_api_fn(self, event_trigger, textbox, chatbot_state, fake_response, additional_inputs):
         @wraps(self.fn)
-        def _api_fn(self, message, chat_state, *args):
+        def _api_fn(message, chat_state, *args):
             if self.is_generator:
                 *_, response = self.fn(message, chat_state, *args)
             else:

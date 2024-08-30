@@ -5,6 +5,10 @@ client = Client("http://localhost:7860/")
 def gradio_chat(message):
     result = client.predict(
             message=message,
+            system_prompt="",
+            chat_engine="auto",
+            speech_synthesis=False,
+            temperature=0.7,
             api_name="/chat"
     )
     return result

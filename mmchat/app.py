@@ -5,6 +5,8 @@ import logging
 import jinja2
 import gradio as gr
 
+from utils.message import parse_message, render_message
+
 ################################################################
 # Load .env and logging
 ################################################################
@@ -40,14 +42,14 @@ DESCRIPTION = """Welcome
 
 SETTINGS = {
     'Info': {
-        '__metadata': {'open': False, 'tabbed': True},
-        'image': dict(cls='Image', type='filepath', label="Input"), #, source='webcam'),
-        'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
+        '__metadata': {'open': False, 'tabbed': False},
+        'session_state': dict(cls='State', value=_default_session_state),
         'status': dict(cls='JSON', label='Status'),
+        'show_status_btn': dict(cls='Button', value='Show')
     },
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
-        'session_state': dict(cls='State', value=_default_session_state),
+        'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
         'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'gpt-3.5-turbo'], value='auto', 
                 interactive=True, label="Chat engine"),
         'speech_synthesis': dict(cls='Checkbox', value=False, 
@@ -59,7 +61,10 @@ SETTINGS = {
     }
 }
 
-KWARGS = {}
+COMPONENTS = {}
+
+COMPONENTS_EXCLUDED = {}
+EXCLUDED_KEYS = ['status', 'show_status_btn'] # keys are excluded for chatbot additional inputs
 
 ################################################################
 # Utils
@@ -84,6 +89,10 @@ def _clear(session_state):
     session_state.update(_default_session_state)
     return session_state
 
+def _show_status(*args):
+    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
+    return kwargs
+
 def transcribe(audio=None):
     try:
         from utils.azure_speech import speech_recognition
@@ -96,19 +105,46 @@ def transcribe(audio=None):
 ################################################################
 
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
-bot_fn = _llm_call_stream
 
 def bot_fn(message, history, *args):
-    kwargs = {k: v for k, v in zip(KWARGS.keys(), args)}
+    kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
+    # update "auto"
+    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
+    for param, default_value in AUTOS.items():
+        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
+
+    session_state = kwargs['session_state']
+    session_state['previous_message'] = session_state['message']
+    session_state['message'] = message
+
+    ##########################################################
+
+    bot_message = {'random': _random_bot_fn,
+        'gpt-3.5-turbo': _llm_call_stream,
+        }.get(kwargs['chat_engine'])(message, history, **kwargs)
+    
+    ##########################################################
+    
+    if isinstance(bot_message, str):
+        yield bot_message
+    else:
+        bot_message = yield from bot_message
+
+    if kwargs.get('speech_synthesis', False):
+        try:
+            from utils.azure_speech import speech_synthesis
+            speech_synthesis(text=render_message(parse_message(bot_message), format='speech'))
+        except Exception as e:
+            print(f"Speaker is not supported: {e}")
     print(kwargs)
-    yield from _llm_call_stream(message, history, **kwargs)
+    return bot_message
 
 ################################################################
 # Demo
 ################################################################
 
 def get_demo():
-    global KWARGS
+    global COMPONENTS, COMPONENTS_EXCLUDED
     css="""#chatbot {
     min-height: 600px;
     }
@@ -130,20 +166,21 @@ def get_demo():
                     metadata = _settings['__metadata']
                     with gr.Accordion(section_name, open=metadata.get('open', False)):
                         settings = _create_from_dict(_settings, tabbed=metadata.get('tabbed', False))
-                        KWARGS = {**KWARGS, **settings}
-                status = KWARGS['status']
-                KWARGS = {k: v for k, v in KWARGS.items() if not isinstance(v, (gr.Markdown, gr.HTML, gr.JSON))}
+                        COMPONENTS = {**COMPONENTS, **settings}
+                COMPONENTS_EXCLUDED = {k: v for k, v in COMPONENTS.items() if k in EXCLUDED_KEYS}
+                COMPONENTS = {k: v for k, v in COMPONENTS.items() if k not in EXCLUDED_KEYS}
             with gr.Column(scale=9):
                 # chatbot
                 from utils.utils import change_signature
-                _sig_bot_fn = change_signature(['message', 'history'] + list(KWARGS.keys()))(bot_fn) # better API
+                _sig_bot_fn = change_signature(['message', 'history'] + list(COMPONENTS.keys()))(bot_fn) # better API
                 from utils.gradio import ChatInterface
                 chatbot = ChatInterface(_sig_bot_fn, type='messages', 
-                        additional_inputs=list(KWARGS.values()),
-                        additional_outputs=[KWARGS['session_state'], status],
+                        additional_inputs=list(COMPONENTS.values()),
+                        additional_outputs=[COMPONENTS['session_state'], COMPONENTS_EXCLUDED['status']],
                         multimodal=False,
                         avatar_images=('assets/user.png', 'assets/bot.png'))
                 chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
+                COMPONENTS_EXCLUDED['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS_EXCLUDED['status']])
     return demo
 
 def parse_args():

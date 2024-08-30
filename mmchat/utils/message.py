@@ -4,11 +4,11 @@ import os
 import re
 
 def _trim_local_file(url):
-    return url.removeprefix('\\file=')
+    return url.removeprefix('/file=')
 
 def _prefix_local_file(url):
     if '://' not in url:  # Local file
-        return '\\file=' + url
+        return '/file=' + url
     else:
         return url
 
@@ -111,9 +111,37 @@ def _basename(filepath):
     return os.path.basename(filepath)
 
 def render_message(msg_dict, format='html'):
-    msg = re.sub(r'\n+', '\n', Template(MESSAGE_TEMPLATE, trim_blocks=True, lstrip_blocks=True).render(msg=msg_dict,
-            _prefix_local_file=_prefix_local_file, _basename=_basename)).strip()
-    return msg if 'text' not in msg_dict or not msg_dict['text'] else msg_dict['text'] + '\n' + msg
+    if format == 'html':
+        msg = re.sub(r'\n+', '\n', Template(MESSAGE_TEMPLATE, trim_blocks=True, lstrip_blocks=True).render(msg=msg_dict,
+                _prefix_local_file=_prefix_local_file, _basename=_basename)).strip()
+        msg = msg if 'text' not in msg_dict or not msg_dict['text'] else msg_dict['text'] + '\n' + msg
+    elif format == 'plain':
+        msg = msg_dict["text"] if "text" in msg_dict else ""
+
+        files = []
+        for key in ['images', 'audios', 'videos', 'files']:
+            if key in msg_dict:
+                files.extend(msg_dict[key])
+        cards = []
+        if 'cards' in msg_dict:
+            for card in msg_dict['cards']:
+                cards.append(f"**{card['title']}**:\n\t{card['text']}")
+        buttons = []
+        if 'buttons' in msg_dict:
+            for btn in msg_dict['buttons']:
+                buttons.append(btn if isinstance(btn, str) else btn['text'])
+
+        msg = '\n\n'.join([msg] + files + cards + buttons).strip()
+
+    elif format == 'speech':
+        msg = msg_dict["text"] if "text" in msg_dict else ""
+        
+    elif format == 'json':
+        import json
+        msg = json.dumps(msg_dict, indent=2)
+    else:
+        raise ValueError(f"Invalid format: {format}")
+    return msg
 
 def parse_message(msg_html, cleanup=False):
     soup = BeautifulSoup(msg_html, "html.parser")
