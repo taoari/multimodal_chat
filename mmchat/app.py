@@ -101,20 +101,33 @@ def transcribe(audio=None):
     except Exception as e:
         return f"Microphone is not supported: {e}"
 
+def _speech_synthesis(text):
+    try:
+        from utils.azure_speech import speech_synthesis
+        speech_synthesis(text=text)
+    except Exception as e:
+        print(f"Speaker is not supported: {e}")
+
 ################################################################
 # Bot fn
 ################################################################
 
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 
+def _slash_bot_fn(message, history, **kwargs):
+    cmds = message[1:].split(' ', maxsplit=1)
+    cmd, rest = cmds[0], cmds[1] if len(cmds) == 2 else ''
+    return message
+
 def bot_fn(message, history, *args):
     __TIC = time.time()
     kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
 
     session_state = kwargs['session_state']
+    if len(history) == 0 or message == '/clear':
+        _clear(session_state)
     session_state['previous_message'] = session_state['message']
     session_state['message'] = message
-
     # plain_message = _rerender_message(message)
     # history = _rerender_history(history[session_state['context_switch_at']:])
 
@@ -125,10 +138,13 @@ def bot_fn(message, history, *args):
     for param, default_value in AUTOS.items():
         kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
-    bot_message = {'random': _random_bot_fn,
-        'gpt-3.5-turbo': _llm_call,
-        'gpt-4o': _llm_call_stream,
-        }.get(kwargs['chat_engine'])(message, history, **kwargs)
+    if message.startswith('/') or message.startswith('.'):
+        bot_message = _slash_bot_fn(message, history, **kwargs)
+    else:
+        bot_message = {'random': _random_bot_fn,
+            'gpt-3.5-turbo': _llm_call,
+            'gpt-4o': _llm_call_stream,
+            }.get(kwargs['chat_engine'])(message, history, **kwargs)
     
     ##########################################################
     
@@ -138,11 +154,7 @@ def bot_fn(message, history, *args):
         bot_message = yield from bot_message
 
     if kwargs.get('speech_synthesis', False):
-        try:
-            from utils.azure_speech import speech_synthesis
-            speech_synthesis(text=_rerender_message(bot_message, format='speech'))
-        except Exception as e:
-            print(f"Speaker is not supported: {e}")
+        _speech_synthesis(_rerender_message(bot_message, format='speech'))
     __TOC = time.time()
     session_state['elapsed_time'] = __TOC - __TIC
     print(pprint.pformat(kwargs))
