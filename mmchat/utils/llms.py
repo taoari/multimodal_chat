@@ -74,7 +74,6 @@ Hello *World*
     _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=":: random")
     return bot_message
 
-
 def _llm_call(message, history, **kwargs):
     _kwargs = dict(temperature=max(0.001, kwargs.get('temperature', 0.001)), 
                    max_tokens=kwargs.get('max_tokens', 1024))
