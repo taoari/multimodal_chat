@@ -51,7 +51,7 @@ SETTINGS = {
     'Settings': {
         '__metadata': {'open': True, 'tabbed': False},
         'system_prompt': dict(cls='Textbox', interactive=True, lines=5, label="System prompt"),
-        'chat_engine': dict(cls='Radio', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'], value='auto', 
+        'chat_engine': dict(cls='Dropdown', choices=['auto', 'random', 'gpt-3.5-turbo', 'gpt-4o'], value='auto', 
                 interactive=True, label="Chat engine"),
         'speech_synthesis': dict(cls='Checkbox', value=False, 
                 interactive=True, label="Speech Synthesis"),
@@ -189,7 +189,14 @@ def get_demo():
                         multimodal=False,
                         avatar_images=('assets/user.png', 'assets/bot.png'))
                 chatbot.audio_btn.click(transcribe, [], [chatbot.textbox], queue=False, api_name=False)
-                COMPONENTS_EXCLUDED['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS_EXCLUDED['status']])
+                COMPONENTS_EXCLUDED['show_status_btn'].click(_show_status, list(COMPONENTS.values()), [COMPONENTS_EXCLUDED['status']], api_name=False)
+                # examples
+                with gr.Accordion("Examples", open=False) as examples_accordin:
+                    chat_examples = gr.Examples([
+                        "What's the Everett interpretation of quantum mechanics?",
+                        'Write a Python code to calculate Fibonacci numbers.'
+                        ], inputs=chatbot.textbox, label="AI Chat Examples",
+                    )
     return demo
 
 def parse_args():
