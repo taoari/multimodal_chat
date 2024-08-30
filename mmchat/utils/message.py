@@ -254,3 +254,14 @@ def test_parse_message_references():
     ])])
     assert target == parse_message(render_message(target), cleanup=True)
 
+def _rerender_message(message, format='plain'):
+    return render_message(parse_message(message), format=format)
+
+def _rerender_history(history, format='plain'):
+    res = []
+    for msg in history:
+        msg = {**msg}
+        if isinstance(msg['content'], str):
+            msg['content'] = _rerender_message(msg['content'], format=format)
+        res.append(msg)
+    return res

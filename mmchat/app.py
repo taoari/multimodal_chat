@@ -6,7 +6,7 @@ import jinja2
 import pprint
 import gradio as gr
 
-from utils.message import parse_message, render_message
+from utils.message import parse_message, render_message, _rerender_message, _rerender_history
 
 ################################################################
 # Load .env and logging
@@ -115,6 +115,9 @@ def bot_fn(message, history, *args):
     session_state['previous_message'] = session_state['message']
     session_state['message'] = message
 
+    # plain_message = _rerender_message(message)
+    # history = _rerender_history(history[session_state['context_switch_at']:])
+
     ##########################################################
 
     # update "auto"
@@ -137,7 +140,7 @@ def bot_fn(message, history, *args):
     if kwargs.get('speech_synthesis', False):
         try:
             from utils.azure_speech import speech_synthesis
-            speech_synthesis(text=render_message(parse_message(bot_message), format='speech'))
+            speech_synthesis(text=_rerender_message(bot_message, format='speech'))
         except Exception as e:
             print(f"Speaker is not supported: {e}")
     __TOC = time.time()
