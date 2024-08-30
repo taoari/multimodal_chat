@@ -2,12 +2,24 @@ import os
 import random
 from utils.message import render_message, get_spinner
 
-def _print_messages(messages, title='Chat history:'):
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def _print_messages(messages, title='Chat history:', tag=""):
     icons = {'system': '🖥️', 'user': '👤', 'assistant': '🤖'}
     res = [] if title is None else [title]
     for message in messages:
         res.append(f'{icons[message["role"]]}: {message["content"]}')
-    print('\n'.join(res))
+    out_str = '\n'.join(res) + '\n'
+    print(f"{bcolors.OKGREEN}{out_str}{bcolors.WARNING}{tag}{bcolors.ENDC}")
 
 def _random_bot_fn(message, history, **kwargs):
 
@@ -59,7 +71,7 @@ Hello *World*
     else:
         bot_message = random.choice(list(samples.values()))
     messages = history + [{'role': 'user', 'content': message}]
-    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }])
+    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=":: random")
     return bot_message
 
 
@@ -81,7 +93,7 @@ def _llm_call(message, history, **kwargs):
         **_kwargs,
     )
     bot_message = resp.choices[0].message.content
-    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], title=f'Chat history: {chat_engine}')
+    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: openai ({chat_engine})')
     return bot_message
 
 def _llm_call_stream(message, history, **kwargs):
@@ -107,5 +119,5 @@ def _llm_call_stream(message, history, **kwargs):
         if hasattr(_resp.choices[0].delta, 'content') and _resp.choices[0].delta.content:
             bot_message += _resp.choices[0].delta.content
         yield bot_message
-    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], title=f'Chat history: {chat_engine} stream')
+    _print_messages(messages + [{'role': 'assistant', 'content': bot_message }], tag=f':: openai_stream ({chat_engine})')
     return bot_message

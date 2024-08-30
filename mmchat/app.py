@@ -3,6 +3,7 @@ import os
 import time
 import logging
 import jinja2
+import pprint
 import gradio as gr
 
 from utils.message import parse_message, render_message
@@ -107,17 +108,19 @@ def transcribe(audio=None):
 from utils.llms import _llm_call, _llm_call_stream, _random_bot_fn
 
 def bot_fn(message, history, *args):
+    __TIC = time.time()
     kwargs = {k: v for k, v in zip(COMPONENTS.keys(), args)}
-    # update "auto"
-    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
-    for param, default_value in AUTOS.items():
-        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
     session_state = kwargs['session_state']
     session_state['previous_message'] = session_state['message']
     session_state['message'] = message
 
     ##########################################################
+
+    # update "auto"
+    AUTOS = {'chat_engine': 'gpt-3.5-turbo'}
+    for param, default_value in AUTOS.items():
+        kwargs[param] = default_value if kwargs[param] == 'auto' else kwargs[param]
 
     bot_message = {'random': _random_bot_fn,
         'gpt-3.5-turbo': _llm_call_stream,
@@ -136,7 +139,9 @@ def bot_fn(message, history, *args):
             speech_synthesis(text=render_message(parse_message(bot_message), format='speech'))
         except Exception as e:
             print(f"Speaker is not supported: {e}")
-    print(kwargs)
+    __TOC = time.time()
+    session_state['elapsed_time'] = __TOC - __TIC
+    print(pprint.pformat(kwargs))
     return bot_message
 
 ################################################################
