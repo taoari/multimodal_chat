@@ -206,7 +206,6 @@ def get_demo():
                 with gr.Accordion("Examples", open=False) as examples_accordin:
                     chat_examples = gr.Examples([
                         "What's the Everett interpretation of quantum mechanics?",
-                        'Write a Python code to calculate Fibonacci numbers.'
                         ], inputs=chatbot.textbox, label="AI Chat Examples",
                     )
     return demo
